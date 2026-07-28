@@ -81,7 +81,9 @@ dist build                                # 既定は host モード。現在の
   ディスパッチは `run()` の match
 - **`cli.rs`**: clap の `#[derive(Parser)]`。`--version` は `#[command(version)]` = `env!("CARGO_PKG_VERSION")`
 - **`error.rs`**: `thiserror` によるライブラリ層エラー型
-- **`logging.rs`**: `tracing-subscriber` 初期化。**出力先は stderr**、タイムスタンプなし
+- **`logging.rs`**: `tracing-subscriber` 初期化。**出力先は stderr**、タイムスタンプなし。
+  プロセス環境を読むのは `LogEnv::from_process()` だけで、フィルタの解決（`MINIMAX_LOG` → `RUST_LOG` →
+  `-v`）は `LogEnv` を引数で受け取る純粋関数に切り出してある。テストは `LogEnv::empty()` を注入する
 
 ### サブコマンドを追加する手順
 
@@ -121,6 +123,17 @@ dist build                                # 既定は host モード。現在の
 - 環境変数で解決したフィルタに対し、`src/logging.rs` が**後から** `reqwest` / `hyper` / `hyper_util` / `h2` /
   `rustls` を `warn` に固定する（認証ヘッダのダンプ防止）。HTTP レイヤのトレースが必要なら環境変数ではなく
   `logging.rs` を変更する
+  - **この固定は完全な遮断ではない。** `EnvFilter` は target 文字列が長い directive から順に照合し、
+    最初に一致した 1 本でレベルを決める。固定が勝つのは同名 target（`hyper=trace`）とグローバル指定
+    （`trace`）のときだけで、**`MINIMAX_LOG=hyper::proto=trace` のようにより深い target を指定すると貫通する**
+    （`add_directive` の順序を変えても直らない）。現状 `reqwest` / `hyper` / `h2` / `rustls` は
+    依存グラフに 1 つも無いため実害は無い。**`reqwest` を入れる PR で `filter::Targets` を `and` で
+    AND 結合する形に変えて塞ぐ。** 現在の挙動は `logging.rs` の
+    `http_layer_pins_beat_same_name_and_global_directives` と
+    `deeper_targets_currently_bypass_the_http_layer_pins` で固定している
+- `MINIMAX_LOG=` / `RUST_LOG=`（空文字）は**未設定として扱う**。`EnvFilter::try_new("")` は `Ok` なので、
+  弾かないと空文字が `RUST_LOG` と `-v` を打ち消してしまう（`EnvFilter::new("")` は既定 directive の
+  `error` になるため、`-vv` を渡しても `error` に落ちる）
 - 認証情報を環境変数で渡す運用は非推奨。環境変数はサブプロセスに継承されるため、
   Claude Code の Bash ツールから `env` で読める
 
@@ -135,7 +148,12 @@ dist build                                # 既定は host モード。現在の
   - **`#![allow(dead_code)]` + `pub(crate)` が必須**（理由は `tests/common/mod.rs` 冒頭のコメント）
 - **環境変数はテストで書き換えない。** edition 2024 では `std::env::set_var` / `remove_var` が unsafe で、
   かつ結合テストはスレッド並列実行される。設定解決層が環境変数ソースを引数で受け取る設計にし、
-  テストでは空のソースを注入する
+  テストでは空のソースを注入する（`logging.rs` の `LogEnv` / `init_with` がその形）
+- **結合テストは spawn する子プロセスの環境変数を明示的に外す。** ライブラリ層の注入口は子プロセスには
+  効かない（子は自分のプロセス環境を読む）ため、`bin()` で
+  `.env_remove("MINIMAX_LOG").env_remove("RUST_LOG")` している。外さないと `RUST_LOG=off` を
+  設定した開発環境で stderr を検証するテストが落ちる。**CI の runner には未設定なので CI は green のままで、
+  ローカルでしか再現しない**。子プロセスに値を渡したいテストは `.env("MINIMAX_LOG", ...)` で個別に上書きする
 - **`std::fs::read_dir` は順序を保証しない。** コレクションを比較する前に安定キーでソートする
 - **相対パスは必ず `/` 区切りに正規化してから出力・比較する**（Windows レグでの差分を防ぐ）
 - `xtask` ワークスペースは作らない。生成器が必要なら `examples/` に置く
@@ -168,8 +186,12 @@ GitHub Actions (`.github/workflows/ci.yml`) — `push: main` と `pull_request` 
   step レベルだと `Swatinem/rust-cache` のキー計算時に効かず、キーと実 toolchain が食い違う）
 - **cross-check**: test ジョブでカバーされない残り 1 ターゲット（`cargo check` はリンクしないのでクロスリンカ不要）
 - **dist-guard**: `Cargo.toml` に `[profile.dist]` が残っていることを検証する。
-  **`[package.metadata.dist] dist = true` は検証していない**ので、`Cargo.toml` を整理するときは自分で守る
-  （消しても PR は green のまま、次のタグ push で初めて壊れる）
+  `[profile.dist]` を消しても `dist plan` は exit 0 なので **PR の `plan` ジョブでは検出されず**、
+  次のタグ push で `dist build` が ``error: profile `dist` is not defined`` になる。それを防ぐジョブ
+  - **`[package.metadata.dist] dist = true` は dist-guard では見ていない。** ただしこちらは消すと
+    `dist plan` 自体が `This workspace doesn't have anything for dist to Release!` で失敗し、
+    `release.yml` が `on: pull_request` で `dist plan` を回すため **PR の `plan` ジョブが赤くなって検出される**
+    （dist-guard に足すのは二重化になるので入れていない）
 
 `.github/workflows/audit.yml` — cargo-deny（advisories を別ジョブに分離 + 週次 cron）。
 **`paths` フィルタは付けない**（GitHub の paths フィルタは「skip」ではなく「workflow を起動しない」なので、
@@ -215,13 +237,23 @@ Intel Mac ではビルド済みバイナリを提供せず、shell installer も
 ## ドキュメント
 
 - README は **`README.md`（英語）と `README.ja.md`（日本語）の 2 本立て。片方だけ更新しない**
-- 配布ターゲット / CI ランナーの表は `dist-workspace.toml`・この CLAUDE.md・`README.md`・`README.ja.md` の
-  **4 箇所に重複している**。ランナーラベルや配布ターゲットを変えたら 4 箇所すべてを揃える
+- 配布ターゲットとランナーラベルは複数ファイルに重複しており、**機械的な整合チェックが無い**。変えたら
+  以下をすべて自分で揃える（`release.yml` は `dist generate` の生成物なので手で触らない）
+  - **配布ターゲット（6 箇所）**: `dist-workspace.toml` の `targets`・`deny.toml` の `[graph] targets`・
+    この CLAUDE.md・`README.md`・`README.ja.md`・`.github/workflows/ci.yml`（test / cross-check の
+    matrix と**その付近のコメント**。コメントだけ古くなりやすい）
+  - **ランナーラベル**: `dist-workspace.toml` の `[dist.github-custom-runners]`・
+    `.github/workflows/ci.yml` の全 `runs-on`・`.github/workflows/audit.yml` の `runs-on`・
+    この CLAUDE.md・両 README
 - CLI のオプション・サブコマンド・環境変数を追加したら両 README の表を更新する（真実は `src/cli.rs`）
 - 言語の使い分け:
   - `CHANGELOG.md` は **英語**（GitHub Release 本文にそのまま載る）
   - `README.md` は英語 / `README.ja.md` は日本語
-  - `.sdd/` 配下は日本語（`.sdd-config.json` の `lang: ja`）
+  - `.sdd/` 配下で**人が書く**ドキュメント（PRD / spec / design / `CONSTITUTION.md`）は日本語
+    （`.sdd-config.json` の `lang: ja`）
+  - **`.sdd/AI-SDD-PRINCIPLES.md` と `.claude/rules/ai-sdd-instructions.md` は上のルールの対象外。**
+    sdd-workflow プラグインの SessionStart フックが英語ソースから毎セッション再生成する生成物で、
+    `lang: ja` に関係なく英語になる。**和訳しても次のセッションで巻き戻る**ので手編集しない
   - 設定ファイルのコメントとソースの doc コメントは日本語、CLI が利用者に見せる文字列（help・エラー）は英語
 
 ## リリース手順
@@ -236,6 +268,20 @@ Intel Mac ではビルド済みバイナリを提供せず、shell installer も
    **これは `publish = false` が原因のときと同じエラー文なので、まず `Cargo.toml` の `version` とタグを照合する
    （`[package.metadata.dist] dist = true` を疑うのは後）。**
 4. `release.yml` が 4 ターゲットをビルドし GitHub Release を自動作成する
+5. 公開後に**アセットが揃っているか突き合わせる**。成果物名は `dist plan` の JSON の `.artifacts` の
+   **キー**に入る（トップレベルに `assets` キーは無い。`.artifacts.<成果物>.assets` は**別物**で、
+   アーカイブ**内**のファイル一覧なので使わない）
+
+   ```bash
+   diff <(dist plan --tag=vX.Y.Z --output-format=json | jq -r '.artifacts | keys[]' | sort) \
+        <(gh release view vX.Y.Z --json assets --jq '.assets[].name' \
+            | grep -vx dist-manifest.json | sort)
+   ```
+
+   差分なし（exit 0）が正常。`<` 側だけにある行はアップロード漏れ、`>` 側は想定外のアセット。
+   `dist-manifest.json` は `dist plan` の出力には無いが `release.yml` の `host` ジョブが必ず
+   アップロードするので除外する（`release.yml` の `rm -f artifacts/*-dist-manifest.json` は
+   先頭に `-` を要求するためプレフィックス無しのものは残る）。除外しないと正常なリリースでも毎回差分が出る。
 
 バージョンの真実は **`Cargo.toml` の `version` 1 箇所**（`Cargo.lock` は cargo が自動更新）。
 CHANGELOG は `## [X.Y.Z] - YYYY-MM-DD` 形式を厳守する（dist が parse-changelog で抽出する）。
