@@ -33,7 +33,5 @@ rustc-ice-*.txt
 .env
 .envrc
 
-# AI-SDD local cache（生成物。index.md だけ共有する）
-# 末尾スラッシュ形式にすると配下の ! 再包含が効かないので必ず `*` で書く
-.sdd/.cache/*
-!.sdd/.cache/index.md
+# AI-SDD local cache（生成物。共有せず各自の環境で再生成する）
+.sdd/.cache/
