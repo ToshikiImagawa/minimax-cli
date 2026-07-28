@@ -1,0 +1,35 @@
+name: Security audit
+
+# paths フィルタは付けない。
+# GitHub の paths フィルタは「ジョブを skip」ではなく「workflow を起動しない」であり、
+# branch protection 側からは未報告と区別できない。required status check にすると
+# 依存ファイルを触らない PR が「Waiting for status」で永久にマージできなくなる。
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # 新規 advisory は依存を変更していなくても発生するため週次で回す
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-deny:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # advisories は新規公開で突然赤くなるため、他の check とジョブを分けて
+        # 「どちらが落ちたか」を一目で分かるようにする
+        checks:
+          - advisories
+          - bans licenses sources
+    steps:
+      - uses: actions/checkout@v7
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          # manifest-path は action 側が既定で渡すので arguments に書かない（二重指定になる）
+          command: check ${{ matrix.checks }}
+          log-level: warn

@@ -1,0 +1,59 @@
+# cargo-deny 0.20.x の現行スキーマ。
+# 旧記事にある [licenses] deny / copyleft / allow-osi-fsf-free / default / unlicensed、
+# [advisories] vulnerability / notice / severity-threshold は削除済みでエラーになる。
+# version フィールドは今も documented だが no-op なので書かない。
+
+[graph]
+# 配布する 5 ターゲット全部を列挙する。ここに無いターゲットでしか有効化されない
+# cfg 依存（arch 別クレート等）は advisories / licenses / bans の全チェックから漏れる。
+targets = [
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+]
+all-features = true
+
+[advisories]
+unmaintained = "workspace"
+unsound = "all"
+yanked = "deny"
+ignore = []
+unused-ignored-advisory = "warn"
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+deny = [
+    { crate = "openssl", use-instead = "rustls" },
+    { crate = "openssl-sys", use-instead = "rustls" },
+    { crate = "windows", reason = "bloated", use-instead = "windows-sys" },
+]
+skip = []
+skip-tree = [
+    { crate = "windows-sys", reason = "多数のクレートの基盤で共通版に揃うことがない" },
+]
+
+[bans.std-replacements]
+scope = "workspace"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+
+[licenses]
+confidence-threshold = 0.93
+# 現在の依存グラフに実在するライセンスだけを許可する。
+# 使われていないライセンスを並べると unused-allowed-license（既定 warn）が出る。
+# 依存追加で新しいライセンスが出たらその時点で追記する。
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "Unicode-3.0",
+]
+exceptions = []
+
+[licenses.private]
+ignore = true

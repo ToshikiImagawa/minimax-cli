@@ -1,0 +1,67 @@
+[package]
+name = "minimax-cli"
+version = "0.1.0"
+edition = "2024"
+# clap / assert_cmd の MSRV と edition 2024 の下限が一致する
+rust-version = "1.85"
+description = "Generate speech audio files with the MiniMax AI TTS API without exposing credentials to AI agents"
+readme = "README.md"
+license = "MIT"
+authors = ["Toshiki Imagawa"]
+repository = "https://github.com/ToshikiImagawa/minimax-cli"
+homepage = "https://github.com/ToshikiImagawa/minimax-cli"
+keywords = ["cli", "tts", "minimax", "speech"]
+categories = ["command-line-utilities"]
+# crates.io の minimax-cli は第三者が取得済みのため publish しない
+publish = false
+
+# publish = false は dist からもバイナリを隠してしまい、dist が
+# 「This workspace doesn't have anything for dist to Release!」で失敗する。
+# dist = true で明示的に配布対象に含める（dist 公式が案内している回避方法）。
+[package.metadata.dist]
+dist = true
+
+[[bin]]
+name = "minimax"
+path = "src/main.rs"
+
+[lib]
+name = "minimax_cli"
+path = "src/lib.rs"
+
+[dependencies]
+clap = { version = "4.6", features = ["derive", "wrap_help"] }
+anyhow = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+assert_cmd = "2.2"
+predicates = "3.1"
+# filters / redactions は CLI 出力から可変値（一時パス・バージョン）をマスクするために必須。
+# 無いとスナップショットが即フレークする。
+insta = { version = "1.48", features = ["filters", "redactions", "glob"] }
+
+# lint レベルは Cargo.toml 側に置く（Rust 1.74+）。clippy.toml は設定値専用。
+[lints.rust]
+unsafe_code = "forbid"
+unused_qualifications = "warn"
+unreachable_pub = "warn"
+
+# 注意: [lints] はテストターゲットにも適用される。
+# clippy::print_stdout をここに置くと、テストに println! を書いた時点で
+# `clippy --all-targets -- -D warnings` の CI が落ちる。
+# そのため print_stdout は src/main.rs / src/lib.rs の #![warn(...)] 側に置く。
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+dbg_macro = "warn"
+todo = "warn"
+semicolon_if_nothing_returned = "warn"
+str_to_string = "warn"
+uninlined_format_args = "warn"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
