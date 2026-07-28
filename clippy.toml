@@ -1,0 +1,4 @@
+# lint レベルは Cargo.toml の [lints.clippy] 側に置く。ここは設定値のみ。
+msrv = "1.85"
+avoid-breaking-exported-api = false
+disallowed-names = ["foo", "bar", "baz", "tmp"]

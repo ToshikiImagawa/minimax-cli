@@ -1,0 +1,16 @@
+# rustfmt 単体の既定は style_edition = "2015"、cargo fmt は Cargo.toml の edition から
+# 推論するため両者が食い違う。必ず明示する。
+style_edition = "2024"
+edition = "2024"
+
+max_width = 100
+tab_spaces = 4
+hard_tabs = false
+# Windows を CI に含めるため固定する
+newline_style = "Unix"
+use_small_heuristics = "Default"
+reorder_imports = true
+
+# 以下は 2026-07 時点で unstable（nightly 限定）なので書かない:
+#   imports_granularity, group_imports, wrap_comments,
+#   comment_width, format_code_in_doc_comments, error_on_line_overflow

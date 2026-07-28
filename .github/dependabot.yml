@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # github-actions ecosystem は有効化しない。
+  # .github/workflows/release.yml は dist の生成物で、手が入ると `dist plan` が
+  # 「out of date contents」でハードエラーになる。bot が action バージョンを bump した瞬間、
+  # 以降すべての PR の plan ジョブが恒久的に失敗する（revert するまで直らない）。
+  # Dependabot にワークフローファイル単位の除外指定は無いため、
+  # ci.yml / audit.yml の action バージョンは手動で更新する。
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
