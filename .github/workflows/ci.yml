@@ -47,8 +47,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 配布 5 ターゲットのうち x86_64-unknown-linux-gnu / aarch64-apple-darwin /
-        # x86_64-pc-windows-msvc をネイティブ実行でカバーする。残り 2 つは cross-check ジョブ。
+        # 配布 4 ターゲットのうち x86_64-unknown-linux-gnu / aarch64-apple-darwin /
+        # x86_64-pc-windows-msvc をネイティブ実行でカバーする。残り 1 つは cross-check ジョブ。
         os: [ubuntu-24.04, macos-15, windows-2025]
     steps:
       - uses: actions/checkout@v7
@@ -74,15 +74,14 @@ jobs:
 
   cross-check:
     # リリース時に初めてターゲット固有のコンパイルエラーが出るのを防ぐ。
-    # test ジョブがネイティブ実行でカバーする 3 ターゲットは除き、残り 2 つだけを見る。
-    # cargo check はリンクしないのでクロスリンカは不要。
+    # 配布 4 ターゲットのうち test ジョブがネイティブ実行でカバーする 3 つは除き、
+    # 残り 1 つだけを見る。cargo check はリンクしないのでクロスリンカは不要。
     name: check (${{ matrix.target }})
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         target:
-          - x86_64-apple-darwin
           - aarch64-unknown-linux-gnu
     steps:
       - uses: actions/checkout@v7
@@ -105,9 +104,11 @@ jobs:
           RUSTDOCFLAGS: -D warnings
 
   dist-guard:
-    # [profile.dist] を消すと dist plan は通るが dist build が
-    # `error: profile 'dist' is not defined` で落ちる。しかも PR チェックでは検出されないため、
-    # 「グリーンでマージ → 次のタグ push で 5 ジョブ同時失敗」になる。それをここで防ぐ。
+    # [profile.dist] を消すと dist plan は通る（= PR の plan ジョブでは検出されない）が、
+    # dist build が `error: profile `dist` is not defined` で落ちる。そのため
+    # 「グリーンでマージ → 次のタグ push で build ジョブ 4 つが同時失敗」になる。それをここで防ぐ。
+    # なお [package.metadata.dist] dist = true の方は dist plan 自体が失敗するので
+    # PR の plan ジョブで検出される（ここでは見ていない）。
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7

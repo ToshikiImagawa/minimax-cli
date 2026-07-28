@@ -4,11 +4,10 @@
 # version フィールドは今も documented だが no-op なので書かない。
 
 [graph]
-# 配布する 5 ターゲット全部を列挙する。ここに無いターゲットでしか有効化されない
+# 配布する 4 ターゲット全部を列挙する。ここに無いターゲットでしか有効化されない
 # cfg 依存（arch 別クレート等）は advisories / licenses / bans の全チェックから漏れる。
 targets = [
     "aarch64-apple-darwin",
-    "x86_64-apple-darwin",
     "x86_64-unknown-linux-gnu",
     "aarch64-unknown-linux-gnu",
     "x86_64-pc-windows-msvc",

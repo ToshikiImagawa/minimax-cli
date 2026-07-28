@@ -16,7 +16,7 @@ Generate speech audio files with the [MiniMax AI](https://platform.minimax.io/) 
 
 - **Credentials never reach AI agents.** The token is read from the OS secure store inside the CLI process. There is no `--token` flag, because process arguments are readable by other processes and an AI agent that builds the command would leave the token in its conversation log forever.
 - **stdout stays clean.** Artifacts and machine-readable output go to stdout; logs, progress, and errors go to stderr. AI agents ingest stdout directly, so nothing extra is written there.
-- **Prebuilt binaries for 5 platforms**, published to GitHub Releases with shell and PowerShell installers.
+- **Prebuilt binaries for 4 platforms**, published to GitHub Releases with shell and PowerShell installers.
 - **No runtime dependencies.** A single binary.
 
 ## Requirements
@@ -25,6 +25,9 @@ Generate speech audio files with the [MiniMax AI](https://platform.minimax.io/) 
 - Rust 1.85 or later (edition 2024) — only when building from source
 
 ## Installation
+
+> [!NOTE]
+> No release has been published yet, so the prebuilt binaries and installers below are not available. Use **Build from source** for now.
 
 ### Install prebuilt binaries via shell script
 
@@ -86,7 +89,6 @@ Passing credentials through environment variables is discouraged: environment va
 | Target | CI runner | Notes |
 |:---|:---|:---|
 | `aarch64-apple-darwin` | `macos-15` | Apple Silicon |
-| `x86_64-apple-darwin` | `macos-15-intel` | Intel Mac. GitHub Actions support for x86_64 macOS ends in August 2027 |
 | `x86_64-unknown-linux-gnu` | `ubuntu-24.04` | glibc |
 | `aarch64-unknown-linux-gnu` | `ubuntu-24.04-arm` | glibc |
 | `x86_64-pc-windows-msvc` | `windows-2025` | |

@@ -13,8 +13,15 @@ use std::path::PathBuf;
 use assert_cmd::Command;
 
 /// テスト対象のバイナリを起動する [`Command`] を返す。
+///
+/// `MINIMAX_LOG` / `RUST_LOG` を**子プロセスから外す**。テスト側のプロセス環境は書き換えない
+/// （edition 2024 では `std::env::set_var` が unsafe で、かつテストはスレッド並列に走る）。
+/// 外さないと `RUST_LOG=off` を設定した開発環境で stderr の診断が消え、
+/// stderr を検証するテストが落ちる。ライブラリ層の注入口は `logging::LogEnv` 側。
 pub(crate) fn bin() -> Command {
-    Command::cargo_bin("minimax").expect("binary `minimax` should be built")
+    let mut command = Command::cargo_bin("minimax").expect("binary `minimax` should be built");
+    command.env_remove("MINIMAX_LOG").env_remove("RUST_LOG");
+    command
 }
 
 /// リポジトリのルートディレクトリ。
