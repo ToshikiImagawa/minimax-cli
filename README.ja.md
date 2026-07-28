@@ -86,7 +86,6 @@ minimax --version
 | ターゲット | CI ランナー | 備考 |
 |:---|:---|:---|
 | `aarch64-apple-darwin` | `macos-15` | Apple Silicon |
-| `x86_64-apple-darwin` | `macos-15-intel` | Intel Mac。GitHub Actions の x86_64 macOS サポートは 2027 年 8 月終了 |
 | `x86_64-unknown-linux-gnu` | `ubuntu-24.04` | glibc |
 | `aarch64-unknown-linux-gnu` | `ubuntu-24.04-arm` | glibc |
 | `x86_64-pc-windows-msvc` | `windows-2025` | |

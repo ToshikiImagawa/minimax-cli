@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **Prebuilt binaries for `x86_64-apple-darwin` (Intel Mac)** - Intel Mac is no longer a distribution target. The shell installer will fail on Intel Macs; build from source with `cargo install --git https://github.com/ToshikiImagawa/minimax-cli.git` instead
+
 ## [0.1.0] - 2026-07-28
 
 ### Added

@@ -86,7 +86,6 @@ Passing credentials through environment variables is discouraged: environment va
 | Target | CI runner | Notes |
 |:---|:---|:---|
 | `aarch64-apple-darwin` | `macos-15` | Apple Silicon |
-| `x86_64-apple-darwin` | `macos-15-intel` | Intel Mac. GitHub Actions support for x86_64 macOS ends in August 2027 |
 | `x86_64-unknown-linux-gnu` | `ubuntu-24.04` | glibc |
 | `aarch64-unknown-linux-gnu` | `ubuntu-24.04-arm` | glibc |
 | `x86_64-pc-windows-msvc` | `windows-2025` | |

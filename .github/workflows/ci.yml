@@ -74,15 +74,14 @@ jobs:
 
   cross-check:
     # リリース時に初めてターゲット固有のコンパイルエラーが出るのを防ぐ。
-    # test ジョブがネイティブ実行でカバーする 3 ターゲットは除き、残り 2 つだけを見る。
-    # cargo check はリンクしないのでクロスリンカは不要。
+    # 配布 4 ターゲットのうち test ジョブがネイティブ実行でカバーする 3 つは除き、
+    # 残り 1 つだけを見る。cargo check はリンクしないのでクロスリンカは不要。
     name: check (${{ matrix.target }})
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         target:
-          - x86_64-apple-darwin
           - aarch64-unknown-linux-gnu
     steps:
       - uses: actions/checkout@v7

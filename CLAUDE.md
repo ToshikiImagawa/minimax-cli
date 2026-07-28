@@ -10,7 +10,8 @@ OS のセキュアな保存領域に置いた API トークンを使い、**AI �
 
 - コマンド名は `minimax`（crate 名 `minimax-cli`）
 - 現在は環境構築フェーズ。`--version` / `--help` が動く骨格のみで TTS は未実装
-- 配布は cargo-dist（`dist`）に委譲し、5 ターゲット（macOS arm64/x64、Linux arm64/x64、Windows x64）を GitHub Release で配る
+- 配布は cargo-dist（`dist`）に委譲し、4 ターゲット（macOS arm64、Linux arm64/x64、Windows x64）を GitHub Release で配る。
+  Intel Mac（`x86_64-apple-darwin`）は配布対象外
 - crates.io へは publish しない（`publish = false`）。crates.io の `minimax-cli` は無関係な第三者のクレート
 
 ## 開発コマンド
@@ -102,11 +103,11 @@ GitHub Actions (`.github/workflows/ci.yml`) — `push: main` と `pull_request` 
 
 - **fmt**: `cargo fmt --all --check`
 - **clippy**: `cargo clippy --locked --all-targets --all-features -- -D warnings`
-- **test**: ubuntu-24.04 / macos-15 / windows-2025 の 3 OS（配布 5 ターゲットのうち 3 つをネイティブ実行でカバー）
+- **test**: ubuntu-24.04 / macos-15 / windows-2025 の 3 OS（配布 4 ターゲットのうち 3 つをネイティブ実行でカバー）
 - **msrv**: Rust 1.85 で `cargo check`（`RUSTUP_TOOLCHAIN` は step ではなく **job env** に置く。
   step レベルだと `Swatinem/rust-cache` のキー計算時に効かず、キーと実 toolchain が食い違う）
-- **cross-check**: `x86_64-apple-darwin` / `aarch64-unknown-linux-gnu` の `cargo check --target`
-  （test ジョブでカバーされない残り 2 ターゲット。`cargo check` はリンクしないのでクロスリンカ不要）
+- **cross-check**: `aarch64-unknown-linux-gnu` の `cargo check --target`
+  （test ジョブでカバーされない残り 1 ターゲット。`cargo check` はリンクしないのでクロスリンカ不要）
 - **docs**: `RUSTDOCFLAGS="-D warnings" cargo doc --no-deps`
 - **dist-guard**: `Cargo.toml` に `[profile.dist]` が残っていることを検証
 
@@ -126,8 +127,9 @@ required status check にすると依存を触らない PR が永久にマージ
 GitHub のランナー廃止告知を追い、期限前にここを更新する責任はこちら側にある
 （`cargo-dist-version` の pin は dist 自身の取得を固定するだけで、ランナー廃止からは守らない）。
 
-- `x86_64-apple-darwin` → `macos-15-intel` は **GitHub Actions 最後の x86_64 macOS イメージで 2027 年 8 月まで**。
-  それ以降は「対象から外す」か「クロスビルド / universal2 に切り替える」かを決める必要がある
+`x86_64-apple-darwin`（Intel Mac）は**配布対象外**。GitHub Actions の x86_64 macOS イメージ
+（`macos-15-intel`）が 2027 年 8 月に終了し、期限付きの前提を抱えることになるため外した。
+Intel Mac ではビルド済みバイナリを提供せず、shell installer も失敗する（ソースからのビルドは可能）。
 
 ## コードスタイル
 
