@@ -36,7 +36,7 @@ cargo build --release
 cargo run -- --help
 cargo run -- --version
 
-# テスト（CI は全ジョブ --locked）
+# テスト（CI で cargo を回すジョブは --locked。cargo fmt は --locked を受け付けない）
 cargo test --locked --all-features --all-targets
 cargo test --locked --all-features --doc
 cargo test --test cli                     # 単一テストバイナリ
@@ -69,8 +69,11 @@ dist build                                # 既定は host モード。現在の
 # ローカルでは cargo-xwin / cargo-zigbuild が無く exit 255 で落ちる（CI 専用のモード）
 ```
 
-**`Cargo.lock` は必ずコミットする。** CI は全ジョブ `--locked` なので、`Cargo.toml` の依存を変えたら
-`Cargo.lock` も更新してコミットする（しないと `the lock file needs to be updated` で全ジョブが落ちる）。
+**`Cargo.lock` は必ずコミットする。** CI で cargo を回すジョブ（clippy / test / msrv / cross-check / docs）は
+`--locked` なので、`Cargo.toml` の依存を変えたら `Cargo.lock` も更新してコミットする
+（しないと `the lock file needs to be updated` でこれらのジョブが落ちる）。
+**`cargo fmt` は `--locked` を受け付けない**（`error: unexpected argument '--locked' found`）ので fmt ジョブには付けない。
+dist-guard は grep のみで cargo を実行しない。
 
 ## アーキテクチャ
 
@@ -113,6 +116,14 @@ dist build                                # 既定は host モード。現在の
   AI エージェントがコマンドを組み立てるとトークンが会話ログに永久に残る）。受け口は stdin のみ
 - `println!` の直接使用は `src/main.rs` / `src/lib.rs` の `#![warn(clippy::print_stdout)]` で検出する。
   **`Cargo.toml` の `[lints.clippy]` には置かない**（理由は `Cargo.toml` のコメント）
+- **成果物を stdout に書くときは `writeln!(std::io::stdout().lock(), "{}", path.display())?` を使う。**
+  `clippy::print_stdout` は `print!` / `println!` 系マクロにしか発火しないので、この形は
+  `#[allow]` / `#[expect]` 無しで `-D warnings` を通る。
+  **`#[expect(clippy::print_stdout, ...)]` は付けない** — lint が発火しないため
+  `unfulfilled_lint_expectations` が `-D warnings` で hard error になる
+  （`error: this lint expectation is unfulfilled`）
+- stdout へ書く経路は `.sdd/CONSTITUTION.md` の B-002 の**許可リスト**で管理する。
+  経路を増やすときは同時にそこへ追記する
 
 ## 環境変数
 
@@ -180,7 +191,8 @@ dist build                                # 既定は host モード。現在の
 
 GitHub Actions (`.github/workflows/ci.yml`) — `push: main` と `pull_request` のみ（**タグでは走らせない**）:
 
-- **fmt** / **clippy** / **docs**: 内容は「開発コマンド」節と同一（全ジョブ `--locked`）
+- **fmt** / **clippy** / **docs**: 内容は「開発コマンド」節と同一（clippy / docs は `--locked`。
+  `cargo fmt` は `--locked` を受け付けないため fmt だけ付いていない）
 - **test**: ubuntu-24.04 / macos-15 / windows-2025 の 3 OS（配布 4 ターゲットのうち 3 つをネイティブ実行でカバー）
 - **msrv**: Rust 1.85（`RUSTUP_TOOLCHAIN` は step ではなく **job env** に置く。
   step レベルだと `Swatinem/rust-cache` のキー計算時に効かず、キーと実 toolchain が食い違う）
