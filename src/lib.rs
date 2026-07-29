@@ -18,7 +18,8 @@ pub use error::Error;
 /// バイナリのエントリ。引数パース → ログ初期化 → [`run`] → 終了コード決定。
 pub fn main_entry() -> ExitCode {
     let args = cli::Cli::parse();
-    logging::init(args.verbose);
+    // プロセス環境を読むのはこの 1 行だけ。以降の解決ロジックは値を引数で受け取る。
+    logging::init(args.verbose, &logging::LogEnv::from_process());
     match run(&args) {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {

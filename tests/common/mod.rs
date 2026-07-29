@@ -14,13 +14,19 @@ use assert_cmd::Command;
 
 /// テスト対象のバイナリを起動する [`Command`] を返す。
 ///
-/// `MINIMAX_LOG` / `RUST_LOG` を**子プロセスから外す**。テスト側のプロセス環境は書き換えない
-/// （edition 2024 では `std::env::set_var` が unsafe で、かつテストはスレッド並列に走る）。
-/// 外さないと `RUST_LOG=off` を設定した開発環境で stderr の診断が消え、
-/// stderr を検証するテストが落ちる。ライブラリ層の注入口は `logging::LogEnv` 側。
+/// この CLI が読む環境変数を**子プロセスから外す**。名前は
+/// [`minimax_cli::logging::LogEnv::NAMES`] を回すので、読み取り側に名前を足せば自動で追随する。
+/// テスト側のプロセス環境は書き換えない（edition 2024 では `std::env::set_var` が unsafe で、
+/// かつテストはスレッド並列に走る）。
+///
+/// 外さないと `RUST_LOG=off` を設定した開発環境で stderr の診断が消え、stderr を検証する
+/// テストが落ちる。**CI の runner には未設定なので CI は green のまま、ローカルでしか再現しない。**
+/// 子プロセスに値を渡したいテストは `.env(...)` で個別に上書きする。
 pub(crate) fn bin() -> Command {
     let mut command = Command::cargo_bin("minimax").expect("binary `minimax` should be built");
-    command.env_remove("MINIMAX_LOG").env_remove("RUST_LOG");
+    for name in minimax_cli::logging::LogEnv::NAMES {
+        command.env_remove(name);
+    }
     command
 }
 

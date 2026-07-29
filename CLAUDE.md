@@ -85,8 +85,10 @@ dist-guard は grep のみで cargo を実行しない。
 - **`cli.rs`**: clap の `#[derive(Parser)]`。`--version` は `#[command(version)]` = `env!("CARGO_PKG_VERSION")`
 - **`error.rs`**: `thiserror` によるライブラリ層エラー型
 - **`logging.rs`**: `tracing-subscriber` 初期化。**出力先は stderr**、タイムスタンプなし。
-  プロセス環境を読むのは `LogEnv::from_process()` だけで、フィルタの解決（`MINIMAX_LOG` → `RUST_LOG` →
-  `-v`）は `LogEnv` を引数で受け取る純粋関数に切り出してある。テストは `LogEnv::empty()` を注入する
+  入口は `init(verbose, &LogEnv)` の 1 本で、プロセス環境を読むのは `LogEnv::from_process()` だけ
+  （呼ぶのは `main_entry` の 1 行）。フィルタの解決（`MINIMAX_LOG` → `RUST_LOG` → `-v`）は `LogEnv` を
+  引数で受け取る純粋関数に切り出してあり、テストは `LogEnv::default()` を注入する。
+  読む環境変数の名前は `LogEnv::NAMES` 1 箇所が真実（結合テストの `bin()` もここを回す）
 
 ### サブコマンドを追加する手順
 
@@ -103,8 +105,11 @@ dist-guard は grep のみで cargo を実行しない。
   バイナリ層（`main_entry`）が `anyhow` で受けて表示・終了コードに変換する
 - **現状（環境構築フェーズ）**: `src/error.rs` の `Error` は骨格のみで未使用。`lib.rs::run()` は暫定的に
   `anyhow::Result` を返している。TTS 実装時に `run()` の戻り値を型付きエラーに寄せ、`anyhow` は `main_entry` に閉じる
-- `unwrap()` / `expect()` はテストコード以外で使わない。**例外はコンパイル時に決まるリテラルのパースだけ**
-  （`src/logging.rs` の `"reqwest=warn".parse().expect("valid directive")`）。実行時入力・I/O・環境依存の値には使わない
+- `unwrap()` / `expect()` はテストコード以外で使わない。実行時入力・I/O・環境依存の値には使わない
+  - **現状、本番コード（`src/*.rs` の `#[cfg(test)]` より前）の `unwrap` / `expect` は 0 件。**
+    `logging.rs` を `filter::Targets` の AND 結合に変えた際に、`"reqwest=warn".parse().expect(...)` 5 箇所が
+    不要になった。この状態を維持する
+  - どうしても必要なときの例外は**コンパイル時に決まるリテラルのパースだけ**に限る
   - `clippy::unwrap_used` / `expect_used` は有効化していないため **この規約は機械検出されない**。レビューで見る
 
 ### 出力の方針（認証情報を漏らさないための設計）
@@ -131,20 +136,24 @@ dist-guard は grep のみで cargo を実行しない。
 - **エラー表示は `main_entry` の `tracing::error!` 経由なのでログフィルタの影響を受ける。**
   `MINIMAX_LOG=off` / `RUST_LOG=off` を渡すとエラーメッセージが消え、終了コード 1 だけが返る。
   ログを絞る場合は `MINIMAX_LOG=error` 以上を指定する
-- 環境変数で解決したフィルタに対し、`src/logging.rs` が**後から** `reqwest` / `hyper` / `hyper_util` / `h2` /
-  `rustls` を `warn` に固定する（認証ヘッダのダンプ防止）。HTTP レイヤのトレースが必要なら環境変数ではなく
-  `logging.rs` を変更する
-  - **この固定は完全な遮断ではない。** `EnvFilter` は target 文字列が長い directive から順に照合し、
-    最初に一致した 1 本でレベルを決める。固定が勝つのは同名 target（`hyper=trace`）とグローバル指定
-    （`trace`）のときだけで、**`MINIMAX_LOG=hyper::proto=trace` のようにより深い target を指定すると貫通する**
-    （`add_directive` の順序を変えても直らない）。現状 `reqwest` / `hyper` / `h2` / `rustls` は
-    依存グラフに 1 つも無いため実害は無い。**`reqwest` を入れる PR で `filter::Targets` を `and` で
-    AND 結合する形に変えて塞ぐ。** 現在の挙動は `logging.rs` の
-    `http_layer_pins_beat_same_name_and_global_directives` と
-    `deeper_targets_currently_bypass_the_http_layer_pins` で固定している
-- `MINIMAX_LOG=` / `RUST_LOG=`（空文字）は**未設定として扱う**。`EnvFilter::try_new("")` は `Ok` なので、
-  弾かないと空文字が `RUST_LOG` と `-v` を打ち消してしまう（`EnvFilter::new("")` は既定 directive の
-  `error` になるため、`-vv` を渡しても `error` に落ちる）
+- **HTTP レイヤは `warn` より下に開かない。** `src/logging.rs` が、環境変数で解決した `EnvFilter` と
+  `HTTP_LAYER_CRATES`（`reqwest` / `hyper` / `hyper_util` / `h2` / `rustls`）を `warn` で打ち止めにする
+  `filter::Targets` を `FilterExt::and` で **AND 結合**する（認証ヘッダのダンプ防止）。
+  どちらか一方でも落とすイベントは出力されない
+  - `Targets` は target を `::` 区切りの**接頭辞**で照合するため、`hyper` の指定が `hyper::proto::h1` にも効く。
+    グローバル指定（`trace`）・同名 target（`hyper=trace`）・深い target（`hyper::proto=trace`）の
+    いずれでも貫通しない（`logging.rs` の `the_ceiling_cannot_be_bypassed_by_any_directive` が
+    実際にイベントを流して固定している）
+  - **かつて `add_directive` で後付け上書きしていたときは深い target で貫通していた。** `EnvFilter` は
+    target 文字列が長い directive を優先するため、`hyper=warn` より `hyper::proto=trace` が勝っていた。
+    後付け上書きに戻してはならない
+  - 依存に新しい HTTP / TLS クレートを入れるときは `HTTP_LAYER_CRATES` に追加する。
+    この配列はテストからも参照しているので、追加すれば上限の検証対象にも自動で入る
+  - HTTP レイヤのトレースが必要なら環境変数ではなく `logging.rs` を変更する
+- `MINIMAX_LOG=` / `RUST_LOG=`（空文字・空白のみ）は**未設定として扱う**。`EnvFilter::try_new("")` は `Ok`
+  なので、弾かないと空文字が `RUST_LOG` と `-v` を打ち消してしまう（`EnvFilter::new("")` は既定 directive の
+  `error` になるため、`-vv` を渡しても `error` に落ちる）。正規化は境界の `LogEnv::new()` で行う
+  （フィールドは private なので、正規化を通らない `LogEnv` は外から作れない）
 - 認証情報を環境変数で渡す運用は非推奨。環境変数はサブプロセスに継承されるため、
   Claude Code の Bash ツールから `env` で読める
 
@@ -159,12 +168,15 @@ dist-guard は grep のみで cargo を実行しない。
   - **`#![allow(dead_code)]` + `pub(crate)` が必須**（理由は `tests/common/mod.rs` 冒頭のコメント）
 - **環境変数はテストで書き換えない。** edition 2024 では `std::env::set_var` / `remove_var` が unsafe で、
   かつ結合テストはスレッド並列実行される。設定解決層が環境変数ソースを引数で受け取る設計にし、
-  テストでは空のソースを注入する（`logging.rs` の `LogEnv` / `init_with` がその形）
+  テストでは空のソースを注入する（`logging.rs` の `LogEnv` / `init(verbose, &LogEnv)` がその形。
+  テストは `LogEnv::default()` を渡す）
 - **結合テストは spawn する子プロセスの環境変数を明示的に外す。** ライブラリ層の注入口は子プロセスには
-  効かない（子は自分のプロセス環境を読む）ため、`bin()` で
-  `.env_remove("MINIMAX_LOG").env_remove("RUST_LOG")` している。外さないと `RUST_LOG=off` を
-  設定した開発環境で stderr を検証するテストが落ちる。**CI の runner には未設定なので CI は green のままで、
-  ローカルでしか再現しない**。子プロセスに値を渡したいテストは `.env("MINIMAX_LOG", ...)` で個別に上書きする
+  効かない（子は自分のプロセス環境を読む）ため、`bin()` が `LogEnv::NAMES` を回して `env_remove` している。
+  外さないと `RUST_LOG=off` を設定した開発環境で stderr を検証するテストが落ちる。
+  **CI の runner には未設定なので CI は green のままで、ローカルでしか再現しない**。
+  子プロセスに値を渡したいテストは `.env("MINIMAX_LOG", ...)` で個別に上書きする
+  - 環境変数名を名指しで並べず `LogEnv::NAMES` を回すのは、読み取り側に名前を足したときテスト側の
+    除去リストが追随せず「開発者の環境でだけ落ちる」事故が再発するのを防ぐため
 - **`std::fs::read_dir` は順序を保証しない。** コレクションを比較する前に安定キーでソートする
 - **相対パスは必ず `/` 区切りに正規化してから出力・比較する**（Windows レグでの差分を防ぐ）
 - `xtask` ワークスペースは作らない。生成器が必要なら `examples/` に置く

@@ -1,6 +1,6 @@
 # プロジェクト原則
 
-**バージョン**: 1.0.0
+**バージョン**: 1.1.0
 **最終更新日**: 2026-07-29
 **ステータス**: 有効
 
@@ -57,8 +57,8 @@
 - [ ] トークンを stdout に出力する経路が存在しない
 - [ ] 値を引数で受け取るフラグ（`--token <VALUE>` 等）が存在しない。受け口は stdin のみ
 - [ ] エラーメッセージと `Display` / `Debug` 実装にトークンが載らない
-- [ ] グローバル指定（`trace`）と同名 target（`hyper=trace`）に対して HTTP レイヤの `warn` 固定が勝つ（`logging.rs` の `http_layer_pins_beat_same_name_and_global_directives` で固定している）
-- [ ] より深い target（`hyper::proto=trace`）が `warn` 固定を **貫通する** 制約を承知している。HTTP クライアントが依存グラフに無いため今は実害が無い。`reqwest` を依存に入れる PR で `filter::Targets` の AND 結合に置き換えて塞ぐ（`deeper_targets_currently_bypass_the_http_layer_pins` が落ちることで検知できる）
+- [ ] HTTP レイヤのログが `warn` より下に開かない。どんな directive を与えても貫通しない（グローバル指定 `trace` / 同名 target `hyper=trace` / 深い target `hyper::proto=trace` のすべてを `logging.rs` の `the_ceiling_cannot_be_bypassed_by_any_directive` が実際にイベントを流して固定している）
+- [ ] 依存に新しい HTTP / TLS クレートを追加したとき、`logging.rs` の `HTTP_LAYER_CRATES` にも追加した（この配列はテストからも参照するため、追加すれば上限の検証対象に自動で入る）
 
 **違反例**:
 
@@ -71,7 +71,7 @@
 
 - トークンの受け口を stdin に限定する
 - トークンを保持する型の `Display` / `Debug` を封じる（`secrecy` 等）
-- `logging.rs` で HTTP レイヤのクレートを `warn` に固定する（同名 target とグローバル指定に対して有効。深い target は `reqwest` 導入時に塞ぐ）
+- `logging.rs` で、環境変数由来の `EnvFilter` と HTTP レイヤを `warn` で打ち止めにする `filter::Targets` を `FilterExt::and` で AND 結合する。`Targets` は target を `::` 区切りの接頭辞で照合するため深い target にも効く（`add_directive` による後付け上書きは深い target で貫通するので使わない）
 
 ---
 
@@ -129,7 +129,7 @@
 **準拠例**:
 
 - `LogEnv::from_process()` で読み、`resolve_directives(verbose, &env)` に値として渡す
-- テストは `LogEnv::empty()` を注入する。子プロセスを spawn するテストは `bin()` で環境変数を外す
+- テストは `LogEnv::default()` を注入する。子プロセスを spawn するテストは `bin()` が `LogEnv::NAMES` を回して環境変数を外す（名前の真実を読み取り側の 1 箇所に置く）
 
 ---
 
@@ -394,7 +394,7 @@ tests/
 **検証方法**:
 
 - [ ] `unsafe` を書かない（`[lints.rust] unsafe_code = "forbid"`）
-- [ ] `unwrap()` / `expect()` をテスト以外で使わない。例外は **コンパイル時に決まるリテラルのパースだけ**
+- [ ] `unwrap()` / `expect()` をテスト以外で使わない。**現状 `src/*.rs` の本番コードは 0 件なので、この状態を維持する。** どうしても必要なときの例外はコンパイル時に決まるリテラルのパースだけに限る
 - [ ] `todo!()` / `dbg!()` を残さない。未実装は `anyhow::bail!` でスタブする（この `anyhow::bail!` は技術スタック制約の「現フェーズの例外（エラー）」として許容する）
 - [ ] `cargo clippy --locked --all-targets --all-features -- -D warnings` が通る
 - [ ] `Cargo.toml` の `rust-version` で `cargo check --locked --all-targets --all-features` が通る
@@ -502,11 +502,7 @@ tests/
 
 ### 既存コード向け
 
-現在は環境構築フェーズで TTS は未実装です。下記の未達 3 件を除き、原則は最初から全面的に適用します。
-
-**未達**:
-
-- HTTP レイヤの `warn` 固定は深い target で貫通する。制約と解消条件は B-001 の検証方法に書いた
+現在は環境構築フェーズで TTS は未実装です。下記の未達 2 件を除き、原則は最初から全面的に適用します。
 - `lib.rs::run()` が暫定的に `anyhow::Result` を返し、`src/error.rs` の `Error` は再 export のみで未使用。TTS 実装時に解消する（技術スタック制約の「現フェーズの例外（エラー）」を参照）
 - `.sdd/PRD_TEMPLATE.md` / `.sdd/SPECIFICATION_TEMPLATE.md` / `.sdd/DESIGN_DOC_TEMPLATE.md` は sdd-workflow 4.0.0 の汎用テンプレートのままで、「関連ドキュメント」表が求める原則参照セクション・原則準拠チェックリストが未反映。`.sdd/` に PRD / spec / design が 1 件も無いため実害は無い。最初に `/generate-prd` / `/generate-spec` を実行する PR で `/constitution sync` を掛け、あわせて言語依存の記述を Rust に合わせる
 
@@ -517,6 +513,26 @@ tests/
 - **変更プロセス**: 下記「改定プロセス」
 
 ## 変更履歴
+
+### v1.1.0 (2026-07-29)
+
+**HTTP レイヤの遮断を実装レベルで完成させ、B-001 の検証方法を強められる形に更新**
+
+`/simplify` の 4 観点レビュー（Altitude 観点）で、`logging.rs` の HTTP レイヤ `warn` 固定が
+`add_directive` による後付け上書きであり、`hyper::proto=trace` のような**より深い target で貫通する**
+ことが実測で確認された（capture ハーネスで `authorization: Bearer leaked` の出力を再現）。
+しかも当時のテストは「貫通すること」を固定していたため、`reqwest` を追加しても CI は green のままで、
+「導入 PR で直す」という約束は人の記憶にしか依存していなかった。
+
+- `EnvFilter` と `filter::Targets` を `FilterExt::and` で AND 結合する形に置き換えた。`Targets` は
+  target を `::` 区切りの接頭辞で照合するため、グローバル指定・同名 target・深い target の
+  いずれでも貫通しない
+- B-001 の検証方法から「貫通する制約を承知している」を削除し、「どんな directive を与えても
+  `warn` より下に開かない」と「新しい HTTP / TLS クレートを `HTTP_LAYER_CRATES` に追加した」に置き換えた
+- 「導入 > 既存コード向け」の未達を 3 件から 2 件に減らした
+- 副次的に本番コードの `unwrap` / `expect` が 0 件になったため、T-001 の検証項目をその状態の維持に強めた
+- A-001 の準拠例を実装に合わせた（入口は `init(verbose, &LogEnv)` の 1 本、テストは `LogEnv::default()`、
+  環境変数名の真実は `LogEnv::NAMES`）
 
 ### v1.0.0 (2026-07-29)
 
