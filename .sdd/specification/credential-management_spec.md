@@ -2,7 +2,7 @@
 id: "spec-credential-management"
 title: "認証情報管理"
 type: "spec"
-status: "draft"
+status: "approved"
 sdd-phase: "specify"
 created: "2026-07-29"
 updated: "2026-07-29"
@@ -84,9 +84,18 @@ B-002 は非交渉です。この機能が書き込む出力をすべて列挙�
 
 ## 3.3. 原則からの逸脱
 
-**逸脱はありません。** B-001 / B-002 / A-001 / A-002 / D-001 / T-001 のすべてに準拠します。
+**B-001 に関わる逸脱はありません。** B-001 は例外を認めない最上位原則であり、この機能はトークンを
+AI エージェントに渡す経路を 1 つも持ちません（stdin 限定の入力、`--token` フラグを作らない、等）。
 
-ただし Linux では、保存したトークンが**再起動で失われます**（PRD の DC_004）。
+**B-002 には 1 件、実装完了までの正式な逸脱があります。** 3.2 で述べた通り、`auth status` の
+stdout 出力（リージョンの識別子 1 行）は CONSTITUTION.md の許可リストに**未追記**です。これは
+CONSTITUTION.md の例外プロセス（文書化・正当化・追跡）に沿って記録した一時的な逸脱であり、
+実装 PR で許可リストへ追記することで解消します（追記を伴わない実装は B-002 違反となるため、
+design 側にも同じ制約を引き継いでいます）。
+
+A-001 / A-002 / D-001 / T-001 には逸脱はありません。
+
+なお Linux では、保存したトークンが**再起動で失われます**（PRD の DC_004）。
 これは原則からの逸脱ではなく、保存方式の制約を要求として受け入れたものです。
 利用者への明示（両 README とエラーメッセージ）を仕様に含めます（4.2 の FR-010）。
 
@@ -254,22 +263,23 @@ pub enum CredentialError {
     InvalidToken,
     /// 標準入力が端末に接続されている（FR-005）。
     InteractiveInputRejected,
-    /// 標準入力の読み取り自体に失敗した。
+    /// 標準入力の読み取り自体に失敗した。元の I/O エラーを保持する。
     ///
     /// **`StoreUnavailable` に含めてはならない。** 標準入力の失敗を資格情報ストアの失敗として
     /// 報告すると、この機能が防ごうとしている「原因の誤報告」を自ら犯すことになる。
-    StdinRead,
+    StdinRead(std::io::Error),
 }
 
 /// ストアに到達できなかった原因の区分。利用者への案内を変えるために分ける。
+/// 各 variant は元のメッセージを保持する（デバッグ時に詳細を失わないため）。
 #[derive(Debug)]
 pub enum StoreFailure {
     /// ストアの機構自体が利用できない。
-    Unavailable,
+    Unavailable(String),
     /// 権限が不足している。
-    PermissionDenied,
+    PermissionDenied(String),
     /// 上記に当てはまらない失敗。
-    Other,
+    Other(String),
 }
 ```
 
