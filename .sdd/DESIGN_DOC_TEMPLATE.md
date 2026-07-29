@@ -16,12 +16,12 @@ risk: "medium"
 
 # 技術設計書テンプレート (Design Doc)
 
-このドキュメントは `${SDD_SPECIFICATION_PATH}/` 配下の技術設計書（Design Doc）を作成する際のテンプレートです。
+このドキュメントは `.sdd/specification/` 配下の技術設計書（Design Doc）を作成する際のテンプレートです。
 ファイル名は `{機能名}_design.md` となります。
 
-> **注意**: このテンプレートはプラグインのフォールバック用です。
-> プロジェクトで使用する際は、プログラミング言語やプロジェクト構成に合わせてカスタマイズし、
-> `${SDD_ROOT}/DESIGN_DOC_TEMPLATE.md` として保存してください。
+> **注意**: このテンプレートは `minimax-cli`（Rust CLI）用にカスタマイズ済みです
+> （`/constitution sync` 適用済み、原則 v1.1.1 準拠）。プラグインの汎用テンプレートで上書きしないでください。
+> 原則を改定したときは `/constitution sync` を再実行して同期します。
 
 ## 抽象仕様書との違い
 
@@ -36,6 +36,74 @@ risk: "medium"
 
 **関連 Spec:** [xxx_spec.md へのリンク]
 **関連 PRD:** [requirement/{機能名}.md へのリンク]
+**準拠する原則バージョン:** [CONSTITUTION.md](../CONSTITUTION.md) v1.1.1
+
+---
+
+## 原則準拠チェックリスト `<MUST>`
+
+設計を書き終えたら、この設計が [CONSTITUTION.md](../CONSTITUTION.md) の各原則を満たしていることを
+1 項目ずつ確認します。**該当しない項目は「該当なし」と理由を書き、空欄で残さないでください。**
+
+### B-001: 認証情報を AI エージェントの到達範囲に置かない（最優先・例外なし）
+
+- [ ] トークンを stdout に出力する経路が設計に存在しない
+- [ ] 値を引数で受け取るフラグ（`--token <VALUE>` 等）を設計していない。受け口は stdin のみ
+- [ ] トークンを保持する型の `Display` / `Debug` を封じている（`secrecy` 等）
+- [ ] エラーメッセージ・`Display` / `Debug` 実装にトークンが載らない
+- [ ] 認証情報を環境変数で渡す運用を前提にしていない（環境変数は子プロセスに継承されるため
+      AI エージェントのシェルツールから読める）
+- [ ] HTTP クライアント / TLS クレートを追加した場合、`src/logging.rs` の `HTTP_LAYER_CRATES` にも追加した
+      （この配列はテストからも参照するため、追加すれば `warn` 打ち止めの検証対象に自動で入る）
+
+### B-002: stdout は成果物専用に保つ
+
+- [ ] stdout へ書く経路が CONSTITUTION.md の**許可リスト**に載っているものだけである
+- [ ] 経路を増やす場合、同じ PR で許可リストへ追記する計画になっている
+- [ ] 成果物の書き出しに `writeln!(std::io::stdout().lock(), "{}", path.display())?` を使う
+      （`#[expect(clippy::print_stdout, ...)]` は**付けない** — lint が発火せず
+      `unfulfilled_lint_expectations` が `-D warnings` で hard error になる）
+- [ ] 失敗時に stdout が空であることを結合テストで固定する設計になっている
+
+### A-001: 境界層は薄く保ち、外部世界の読み取りをそこに閉じる
+
+- [ ] `main.rs` にロジックを追加していない（`main_entry()` を呼ぶだけ）
+- [ ] 環境変数・ファイル・ネットワーク・OS キーストアの読み取りが境界の型に集約されている
+- [ ] 解決ロジックはプロセス環境を書き換えずに単体テストできる（値を引数で受け取る）
+- [ ] 機能モジュール同士の相互依存を作っていない
+
+### A-002: セキュリティに関わる仕組みを自作しない
+
+- [ ] TLS は rustls（`reqwest` は `default-features = false` + `rustls-tls`）
+- [ ] `openssl` / `openssl-sys` を依存グラフに持ち込まない
+- [ ] シークレットの保存に独自のファイル形式・独自の暗号を使っていない
+- [ ] Windows API は `windows-sys`（`windows` は `deny.toml` の `[bans]` で禁止）
+- [ ] 追加した依存のライセンスが `deny.toml` の `[licenses] allow` に含まれる
+      （含まれない場合は同じ PR で allow に追記する）
+
+### D-001: 外形をテストで固定する
+
+- [ ] 追加・変更したサブコマンドの終了コードを検証する結合テストがある
+- [ ] 失敗時に stdout が空であることを検証している
+- [ ] テストが実行環境の環境変数に影響されない（`bin()` が `LogEnv::NAMES` を回して `env_remove` する）
+- [ ] テスト内で `std::env::set_var` / `remove_var` を呼んでいない（edition 2024 では unsafe、
+      かつ結合テストはスレッド並列に走る）
+
+### T-001: 実行時に落ちる余地を残さない
+
+- [ ] `unsafe` を書いていない
+- [ ] `unwrap()` / `expect()` を実装コードに追加していない（**現状 `src/*.rs` の本番コードは 0 件。
+      この状態を維持する**）
+- [ ] `todo!()` / `dbg!()` を残していない（未実装は `anyhow::bail!` でスタブ）
+- [ ] 失敗を `Result` の型で表現し、意味の異なる失敗を別 variant に分けている
+
+### 原則からの逸脱 `<OPTIONAL>`
+
+逸脱がある場合のみ記載します。**B-001 に関わる逸脱は認められません。**
+
+| 原則 ID | 逸脱内容 | 理由 | 補償手段 | 解消条件 | 追跡 Issue |
+|:---|:---|:---|:---|:---|:---|
+| [ID] | [内容] | [理由] | [補償] | [条件] | [#000] |
 
 ---
 
@@ -60,10 +128,21 @@ risk: "medium"
 # 3. 技術スタック `<MUST>`
 
 **なぜその技術を選んだのか** という判断の根拠を明確に残します。
+CONSTITUTION.md の「技術スタック制約」で既に固定されている領域（引数パース = clap、ログ = tracing、
+エラー = thiserror / anyhow、HTTP / TLS = reqwest + rustls、Windows API = windows-sys、配布 = cargo-dist）は
+**再検討せず、その制約に従っていることを書きます**。
 
-| 領域   | 採用技術 | 選定理由 |
-|------|------|------|
-| [領域] | [技術] | [理由] |
+| 領域 | 採用クレート | バージョン | features | 選定理由 |
+|:---|:---|:---|:---|:---|
+| [領域] | [クレート] | [x.y] | [指定した feature / `default-features = false`] | [理由] |
+
+依存を追加する場合は以下も記載します。
+
+- [ ] `deny.toml` の `[licenses] allow` に無いライセンスが増えるか（増えるなら同じ PR で追記）
+- [ ] `[bans]` の禁止クレート（`openssl` / `openssl-sys` / `windows`）を推移的に引き込まないか
+- [ ] そのクレートの MSRV が `Cargo.toml` の `rust-version` 以下か
+- [ ] 配布 4 ターゲットすべてでビルドできるか（クロスコンパイル可否。C ライブラリへのリンクが無いか）
+- [ ] `Cargo.lock` を更新してコミットする（CI の cargo ジョブは `--locked`）
 
 ---
 
@@ -78,24 +157,25 @@ graph TD
 
 ## 4.2. モジュール分割
 
-| モジュール名 | 責務   | 依存関係 | 配置場所 |
-|--------|------|------|------|
-| [名前]   | [責務] | [依存] | [パス] |
+CONSTITUTION.md のレイヤ構成（`main.rs` → `lib.rs::main_entry` → `lib.rs::run` → 機能モジュール → 外部）を
+崩さないこと。層のスキップと循環依存は禁止です。
+
+| モジュール（`src/*.rs`） | 責務 | 依存先 | 外部世界への到達 |
+|:---|:---|:---|:---|
+| [`tts`] | [責務] | [依存] | [MiniMax API / keychain / ファイルシステム / なし] |
 
 ---
 
 # 5. データモデル `<OPTIONAL>`
 
-<!--
-プロジェクトのプログラミング言語に合わせて記法を変更してください。
-例: TypeScript, Go, Python, Kotlin など
--->
+```rust
+use std::path::PathBuf;
 
-```
-// プロジェクトの言語に合わせたデータモデルを記載
-interface SomeEntity {
-  id: string
-  name: string
+/// MiniMax API へ送るリクエスト。serde の rename でフィールド名を API 側に合わせる。
+#[derive(Debug, serde::Serialize)]
+pub struct SynthesisRequest {
+    pub model: String,
+    pub text: String,
 }
 ```
 
@@ -103,14 +183,21 @@ interface SomeEntity {
 
 # 6. インターフェース定義 `<OPTIONAL>`
 
-<!--
-プロジェクトのプログラミング言語に合わせて記法を変更してください。
--->
+エラー型は**意味の異なる失敗を別 variant に分ける**こと（T-001）。とくに「値が無い」と
+「読み取りに失敗した」を同じ variant に潰すと、呼び出し側が両者を区別できず、
+認証情報を持たないまま処理を続行する事故につながります。
 
-```
-// プロジェクトの言語に合わせたインターフェース定義を記載
-interface SomeRepository {
-  fetch(): Promise<Data>
+```rust
+/// ライブラリ層のエラー。バイナリ層（`main_entry`）が anyhow で受けて終了コードに変換する。
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    /// 未登録。利用者には登録コマンドを案内する。
+    #[error("no API token is registered")]
+    TokenNotFound,
+
+    /// キーストア自体にアクセスできなかった。未登録とは区別する。
+    #[error("could not access the OS credential store")]
+    CredentialStoreUnavailable(#[source] keyring::Error),
 }
 ```
 
@@ -126,9 +213,21 @@ interface SomeRepository {
 
 # 8. テスト戦略 `<OPTIONAL>`
 
-| テストレベル | 対象   | カバレッジ目標 |
-|--------|------|---------|
-| [レベル]  | [対象] | [目標]    |
+CONSTITUTION.md は**カバレッジの数値目標を設けていません**（計測未導入）。目標値の列は作らず、
+「何を」「どのレベルで」固定するかを書きます。
+
+| テストレベル | 対象 | 配置場所 | 固定する内容 |
+|:---|:---|:---|:---|
+| 結合（バイナリを spawn） | [サブコマンド] | `tests/cli.rs` | 終了コード / stdout・stderr の出し分け |
+| 単体 | [純粋なロジック] | `src/*.rs` の `#[cfg(test)] mod tests` | [入出力の対応] |
+| doc テスト | [公開 API の例] | doc コメント | [例が動くこと] |
+
+- [ ] 環境変数を読む処理を追加した場合、設定解決層が値を**引数で**受け取る形にした（A-001）
+- [ ] 結合テストが spawn する子プロセスの環境変数を外している（`bin()` が `LogEnv::NAMES` を回す）
+- [ ] `std::fs::read_dir` の結果を比較する場合、安定キーでソートしている
+- [ ] 相対パスを出力・比較する場合、`/` 区切りに正規化している（Windows レグ対策）
+- [ ] まとまった出力（help 全文など）の回帰は `insta` のスナップショットで固定し、可変値
+      （一時パス・バージョン・タイムスタンプ）を filters / redactions でマスクした
 
 ---
 
@@ -158,11 +257,7 @@ interface SomeRepository {
 
 **移行ガイド:**
 
-<!--
-プロジェクトのプログラミング言語に合わせて記法を変更してください。
--->
-
-```
+```rust
 // ❌ 旧コード
 // ✅ 新コード
 ```
@@ -204,6 +299,14 @@ interface SomeRepository {
 - ❌ 機能要件・非機能要件
 - ❌ 用語集
 
+## 書いてはいけない内容（原則違反）
+
+- ❌ **カバレッジの数値目標**（CONSTITUTION.md が計測未導入のため設定しない）
+- ❌ **`unwrap()` / `expect()` を含むコード例**（T-001。設計書の例はそのまま実装される）
+- ❌ **トークンの実値を含む例**（B-001）
+- ❌ **具体値の二重管理**: MSRV・ランナーラベル・配布ターゲット・フォーマット設定の数値は
+      一次情報（`Cargo.toml` / `dist-workspace.toml` / `rustfmt.toml` / `ci.yml`）を参照する形で書く
+
 ---
 
 # Pseudocode の完全性ルール
@@ -212,40 +315,57 @@ Design Doc に記載する pseudocode（データモデル・インターフェ�
 **verbatim でコピーしても動作する完全性**を維持してください。
 実装への転記段階で細部が乖離すると、レビュー指摘や実行時エラーの原因になります。
 
-以下はプロジェクトで使用する言語に合わせて取捨選択・追加してください（TypeScript / Go / Rust 等の
-sub-section を増やせる形を維持すること）。
+## Rust 共通
 
-## Python 共通
+- すべての `use` を明示する（型注釈で参照する型も含む）
+- MSRV（`Cargo.toml` の `rust-version`）で通る API だけを使う。新しい安定化 API を書くとローカルでは
+  通っても CI の msrv ジョブが落ちる
+- **`unwrap()` / `expect()` を書かない**（T-001）。`?` と `Option` / `Result` で伝播させる。
+  設計書のコード例に書くと実装にそのままコピーされる
+- 意味の異なる失敗を同じ variant に潰さない。とくに「無い」と「読めなかった」を分ける
+- `#[derive(Debug)]` を付ける型に認証情報を含めない（含める場合は `Debug` を手実装して封じる）
 
-- すべての import 文を明示する（型注釈で参照する型も含む）
-- `isinstance` チェックは BaseException 階層に注意（`asyncio.CancelledError` は Python 3.8+ で
-  `Exception` のサブクラスではない）
-- `x if x else fallback` の `x` が `""` / `[]` / `0` を取りうる場合は
-  `x if x is not None else fallback` で明示する
+## clippy で hard error になる書き方（CI は `-D warnings`）
 
-## Pydantic v2
+- `todo!()` / `dbg!()` を書かない。未実装のスタブは `anyhow::bail!("... is not implemented yet")`
+- `&str` に `.to_string()` を使わない → `.to_owned()`（`str_to_string`）
+- `format!("{}", x)` と書かない → `format!("{x}")`（`uninlined_format_args`）
+- 変数名に `foo` / `bar` / `baz` / `tmp` を使わない（`clippy.toml` の `disallowed-names`）。
+  一時変数でも使わない
+- `#[expect(clippy::print_stdout, ...)]` を付けない（lint が発火せず
+  `unfulfilled_lint_expectations` が hard error になる）
 
-- `frozen=True` のモデルで `model_validator(mode='after')` 内に再代入する場合は
-  `object.__setattr__(self, ...)` を使用する
-- `default_factory` は `mode='before'` validator の後に評価される（順序に注意）
+## tracing / ログ
 
-## SQLAlchemy / alembic
+- ログの出力先は stderr。タイムスタンプは出さない（`without_time()`。スナップショットの安定性のため）
+- HTTP レイヤの上限（`warn` 打ち止め）を `add_directive` による後付け上書きで実装しない。
+  `EnvFilter` と `filter::Targets` を `FilterExt::and` で **AND 結合**する
+  （`add_directive` は `hyper::proto=trace` のような**より深い target で貫通する**）
 
-- alembic revision ID は 32 文字以下にする（`alembic_version.version_num` が `varchar(32)`）
-- CHECK 制約は遷移を妨げない条件で書く（補助カラムを併用）
+## 環境変数
+
+- 解決ロジックの内部で `std::env::var` を直接呼ばない。境界の型で読み、値を引数で渡す（A-001）
+- edition 2024 では `std::env::set_var` / `remove_var` が unsafe。テストで書き換える設計にしない
+- 空文字・空白のみの値は**未設定として扱う**正規化を境界で行う
+  （`EnvFilter::try_new("")` は `Ok` になるため、弾かないと既定値を打ち消す）
 
 ---
 
-# プロジェクトへのカスタマイズ指針
+# このプロジェクトでの運用
 
-このテンプレートをプロジェクト用にカスタマイズする際は、以下の項目を更新してください：
+`minimax-cli`（Rust CLI）向けに以下を確定済みです。
 
-1. **データモデルの記法**: プロジェクトのプログラミング言語に合わせる
-2. **インターフェース定義の記法**: プロジェクトのプログラミング言語に合わせる
-3. **変更履歴のコード例**: プロジェクトのプログラミング言語に合わせる
-4. **モジュール分割表のカラム**: プロジェクトの構成（パッケージ/モジュール構造）に合わせる
-5. **技術スタック表**: プロジェクトで使用する技術領域に合わせる
-6. **Pseudocode の完全性ルール**: プロジェクトで使用する言語・フレームワークの落とし穴に合わせて取捨選択・追加する
+1. **コード例の記法**: すべて Rust（```` ```rust ````）。シェルの例は ```` ```sh ````
+2. **モジュール分割表のカラム**: `モジュール（src/*.rs）` / `責務` / `依存先` / `外部世界への到達`。
+   crate は単一なのでパッケージ列は持たない
+3. **技術スタック表**: `領域` / `採用クレート` / `バージョン` / `features` / `選定理由`。
+   `features` 列は `default-features = false` の指定を見落とさないために必須
+   （`reqwest` を既定 features で入れると `openssl-sys` を引き込み `audit.yml` が落ちる）
+4. **Pseudocode の完全性ルール**: Rust / clippy / tracing / 環境変数の 4 節。
+   実際に踏んだ落とし穴を追加していく。詳細な運用ルールは `CLAUDE.md` の
+   「コードスタイル」「テスト構成」節が一次情報なので、ここでは**設計書のコード例で誤りやすい点**に絞る
+5. **原則準拠チェックリスト**: 冒頭に置く（設計中に意識されるようにするため）。
+   CONSTITUTION.md の原則を改定したら `/constitution sync` を再実行して同期する
 
 ---
 
