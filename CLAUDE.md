@@ -317,9 +317,9 @@ CHANGELOG は `## [X.Y.Z] - YYYY-MM-DD` 形式を厳守する（dist が parse-c
   `git config user.email` を変更したり `--author` / `git -c user.email=...` で上書きしたりしない
   （グローバル設定は会社アドレスなので、上書きすると公開履歴に会社アドレスが残る）
 
-## AI-SDD Instructions (v4.0.0)
+## AI-SDD Instructions (v4.0.1)
 
-<!-- sdd-workflow version: "4.0.0" -->
+<!-- sdd-workflow version: "4.0.1" -->
 
 このプロジェクトは AI-SDD（AI駆動仕様駆動開発）ワークフローに従います。
 
