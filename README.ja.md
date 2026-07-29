@@ -16,6 +16,7 @@
 
 - **認証情報が AI エージェントに渡らない。** トークンは CLI プロセス内で OS のセキュアな保存領域から読み出します。`--token` フラグは用意しません。プロセス引数は他プロセスから読める上、AI エージェントがコマンドを組み立てるとトークンが会話ログに永久に残るためです。
 - **stdout を汚さない。** 成果物と機械可読な出力は stdout、ログ・進捗・エラーは stderr に出します。AI エージェントは stdout をそのままコンテキストに取り込むため、余計なものを書きません。
+- **ログから認証情報を漏らせません。** 指定したフィルタの上に HTTP レイヤの `warn` 打ち止めを重ねるため、`MINIMAX_LOG` や `RUST_LOG` にどんな値を与えても `Authorization` ヘッダが出るようなワイヤレベルのトレースは有効になりません。
 - **4 プラットフォーム向けのビルド済みバイナリ**を GitHub Release で配布します（シェル / PowerShell インストーラ付き）。
 - **実行時依存なし。** 単一バイナリです。
 
@@ -80,7 +81,12 @@ minimax --version
 
 | 変数 | 説明 |
 |:---|:---|
-| `MINIMAX_LOG` | ログレベル（[`EnvFilter`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) 構文）。未設定時は `RUST_LOG`、それも無ければ `-v` の回数で決まる |
+| `MINIMAX_LOG` | ログレベル（[`EnvFilter`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) 構文）。未設定時は `RUST_LOG`、それも無ければ `-v` の回数で決まる。空文字は未設定として扱う |
+
+どちらの変数にも次の 2 つの制約があります。
+
+- **HTTP レイヤの target は `warn` で打ち止めで、引き上げられません。** `MINIMAX_LOG=hyper=trace` や `MINIMAX_LOG=hyper::proto=trace` を指定してもそれらのログは出ません。対象は `reqwest` / `hyper` / `hyper_util` / `h2` / `rustls` で、その配下の target も含みます。どんなフィルタ値でも `Authorization` ヘッダが stderr に出ないようにするためです。ワイヤレベルのトレースが本当に必要な場合は `src/logging.rs` を変更してください。
+- **`off` にするとエラーメッセージも消えます。** 診断も同じフィルタを通るため、`MINIMAX_LOG=off`（または `RUST_LOG=off`）では説明のない終了コード 1 だけが残ります。エラーは見えるようにしたうえで他を静かにしたい場合は `MINIMAX_LOG=error` 以上を指定してください。
 
 認証情報を環境変数で渡す運用は非推奨です。環境変数は子プロセスに継承されるため、AI エージェントがシェルツールを実行すると読み取れてしまいます。
 

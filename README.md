@@ -16,6 +16,7 @@ Generate speech audio files with the [MiniMax AI](https://platform.minimax.io/) 
 
 - **Credentials never reach AI agents.** The token is read from the OS secure store inside the CLI process. There is no `--token` flag, because process arguments are readable by other processes and an AI agent that builds the command would leave the token in its conversation log forever.
 - **stdout stays clean.** Artifacts and machine-readable output go to stdout; logs, progress, and errors go to stderr. AI agents ingest stdout directly, so nothing extra is written there.
+- **Logs cannot be made to leak credentials.** HTTP layer targets are capped at `warn` on top of whatever filter you set, so no `MINIMAX_LOG` or `RUST_LOG` value can enable wire-level tracing that would dump `Authorization` headers.
 - **Prebuilt binaries for 4 platforms**, published to GitHub Releases with shell and PowerShell installers.
 - **No runtime dependencies.** A single binary.
 
@@ -80,7 +81,12 @@ Running `minimax` with no arguments prints the help text.
 
 | Variable | Description |
 |:---|:---|
-| `MINIMAX_LOG` | Log level in [`EnvFilter`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) syntax. Falls back to `RUST_LOG`, then to the `-v` count |
+| `MINIMAX_LOG` | Log level in [`EnvFilter`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html) syntax. Falls back to `RUST_LOG`, then to the `-v` count. An empty value counts as unset |
+
+Two constraints apply to both variables:
+
+- **HTTP layer targets are capped at `warn` and cannot be raised.** `MINIMAX_LOG=hyper=trace` and `MINIMAX_LOG=hyper::proto=trace` will not turn those logs on. The cap covers `reqwest`, `hyper`, `hyper_util`, `h2`, and `rustls` — including nested targets — so that no filter value can dump `Authorization` headers to stderr. Edit `src/logging.rs` if you genuinely need wire-level tracing.
+- **`off` also silences error messages.** Diagnostics are emitted through the same filter, so `MINIMAX_LOG=off` (or `RUST_LOG=off`) leaves only exit code 1 with no explanation. Use `MINIMAX_LOG=error` or higher to keep errors visible while quieting the rest.
 
 Passing credentials through environment variables is discouraged: environment variables are inherited by child processes, so an AI agent running a shell tool can read them.
 
