@@ -2,7 +2,7 @@
 id: "prd-credential-management"
 title: "認証情報管理"
 type: "prd"
-status: "draft"
+status: "approved"
 created: "2026-07-29"
 updated: "2026-07-29"
 depends-on: []
