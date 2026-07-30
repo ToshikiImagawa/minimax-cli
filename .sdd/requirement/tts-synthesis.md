@@ -2,9 +2,9 @@
 id: "prd-tts-synthesis"
 title: "音声合成"
 type: "prd"
-status: "draft"
+status: "approved"
 created: "2026-07-29"
-updated: "2026-07-29"
+updated: "2026-07-30"
 depends-on: []
 tags: ["api", "audio", "output", "security", "tts"]
 category: "synthesis"
@@ -236,6 +236,14 @@ flowchart LR
     - ファイルへの書き出し
     - 失敗時の後始末
     - 成果物パスの出力
+
+> **「送信前の検証」はこの一覧では 1 グループですが、3.1 節の SysML 要求図では
+> 異なる親に分かれます。** テキスト長の上限検査（`FR_005`）は `FailureAndCost` の子、
+> 空のテキストの拒否（`FR_002_05`）はテキストの受け取り（`FR_002: AcceptText`）の子です。
+> 両者とも「API を呼ぶ前に完結する検査」という機能上の役割は同じですが、
+> 要求の出自（テキストの形式に関する検査か、コストに関する検査か）が異なるため、
+> 要求図では親を分けています。この一覧はテキスト形式での概観であり、
+> 要求 ID の親子関係の正は 3.1 節です。
 
 ---
 
@@ -552,6 +560,50 @@ requirementDiagram
     DetermineOutput - contains -> ProtectExisting
 ```
 
+### 音声パラメータの指定
+
+```mermaid
+%%{init: {'theme': 'dark'}}%%
+requirementDiagram
+    functionalRequirement SpecifyVoice {
+        id: FR_003
+        text: "音声とモデルを必須で指定し、言語を省略可能で指定する"
+        risk: medium
+        verifymethod: test
+    }
+
+    functionalRequirement RequireVoice {
+        id: FR_003_01
+        text: "音声の指定を必須とする"
+        risk: medium
+        verifymethod: test
+    }
+
+    functionalRequirement RequireModel {
+        id: FR_003_02
+        text: "モデルの指定を必須とする"
+        risk: medium
+        verifymethod: test
+    }
+
+    functionalRequirement OptionalLanguage {
+        id: FR_003_03
+        text: "言語の指定を省略可能とする"
+        risk: low
+        verifymethod: test
+    }
+
+    SpecifyVoice - contains -> RequireVoice
+    SpecifyVoice - contains -> RequireModel
+    SpecifyVoice - contains -> OptionalLanguage
+```
+
+**「送信前の検証」「API 呼び出し」「成果物の書き出し」に詳細図を置いていない理由:**
+「送信前の検証」は 2.3 節の注記のとおり単一の親を持たないため、この形式の詳細図に馴染みません。
+「API 呼び出し」（`FR_006`）の業務エラー区分は 4.1 節の表で説明しており、区分ごとの要求 ID は
+設けていません（区分の追加はモデル・料金体系側の変更に追随するものであり、要求としての安定した
+サブ要求ではないため）。「成果物の書き出し」（`FR_007`）はこれ以上分解できない単一の要求です。
+
 ---
 
 # 4. 要求の詳細説明
@@ -590,14 +642,20 @@ requirementDiagram
 
 ### FR_003: 音声パラメータの指定
 
-| パラメータ | 必須 | 既定値 | 理由 |
-|:---|:---|:---|:---|
-| 音声（識別子） | 必須 | なし | 本 CLI が既定値を持つと、MiniMax 側の音声ライブラリの変更で壊れる依存を抱える |
-| モデル | 必須 | なし | モデルによって課金単価が異なるため、本 CLI が勝手に選ばない |
-| 言語 | 省略可 | API 側の自動判定 | 日本語テキストの読みの安定に効くため露出する |
+**含まれる機能:**
 
-音声とモデルに既定値を置かないのは意図的な判断です。**課金単価がモデルによって異なるため**、
-利用者の明示的な選択を求めます。
+- **FR_003_01: 音声の指定を必須とする** — 既定値を置きません。
+  本 CLI が既定値を持つと、MiniMax 側の音声ライブラリの変更で壊れる依存を抱えます
+- **FR_003_02: モデルの指定を必須とする** — 既定値を置きません。
+  **モデルによって課金単価が異なるため**、本 CLI が利用者の代わりに選ぶことをしません
+- **FR_003_03: 言語の指定を省略可能とする** — 省略した場合は API 側の自動判定に委ねます。
+  日本語テキストの読みの安定に効くため露出します
+
+| パラメータ | 対応する ID | 必須 | 既定値 |
+|:---|:---|:---|:---|
+| 音声（識別子） | FR_003_01 | 必須 | なし |
+| モデル | FR_003_02 | 必須 | なし |
+| 言語 | FR_003_03 | 省略可 | API 側の自動判定 |
 
 その他の音声パラメータは v0.1.0 では露出しません。対象は 7 節に列挙しています。
 
