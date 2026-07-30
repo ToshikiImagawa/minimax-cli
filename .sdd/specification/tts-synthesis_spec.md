@@ -2,10 +2,10 @@
 id: "spec-tts-synthesis"
 title: "音声合成"
 type: "spec"
-status: "draft"
+status: "approved"
 sdd-phase: "specify"
 created: "2026-07-29"
-updated: "2026-07-29"
+updated: "2026-07-30"
 depends-on: ["prd-tts-synthesis"]
 tags: ["api", "audio", "output", "security", "tts"]
 category: "synthesis"
@@ -97,6 +97,9 @@ B-002 は非交渉です。この機能が書き込む出力をすべて列挙�
 | FR_002_04 | 4.2 FR-002 / 5.3 | 単体テスト + 結合テスト |
 | FR_002_05 | 4.2 FR-003 | 単体テスト |
 | FR_003 | 5.1（`--voice` / `--model` / `--language`） | 結合テスト |
+| FR_003_01 | 5.1（`--voice` を必須にする） | 結合テスト |
+| FR_003_02 | 5.1（`--model` を必須にする） | 結合テスト |
+| FR_003_03 | 5.1（`--language` を省略可能にする） | 結合テスト |
 | FR_004 | 5.1（`--output`）/ 4.2 FR-005 | 結合テスト |
 | FR_004_01 | 5.1（`--output` を必須にする） | 結合テスト |
 | FR_004_02 | 4.2 FR-004 / 6（`format_from_path`） | 単体テスト |
@@ -143,10 +146,10 @@ B-002 は非交渉です。この機能が書き込む出力をすべて列挙�
 | ID | カテゴリ | 要件 | 目標 |
 |:---|:---|:---|:---|
 | NFR-001 | セキュリティ | 認証ヘッダがどのログ設定でも出力されない | HTTP レイヤのログ上限テストが新クレートも対象にする |
-| NFR-002 | セキュリティ | トークンがエラーメッセージ・ログに現れない | レビュー |
-| NFR-003 | 信頼性 | 失敗時に出力パスに不完全なファイルが残らない | 単体テスト |
-| NFR-004 | 移植性 | 配布対象の全ターゲットで動作する | CI の test（3 OS）と cross-check |
-| NFR-005 | テスト独立性 | HTTP 通信なしでリクエスト組み立てとレスポンス解釈をテストできる | 単体テスト |
+| NFR-002 | セキュリティ | トークンがエラーメッセージ・ログに現れない | `TtsError` / `ApiFailure` の `Display` 実装にトークンの値が含まれない |
+| NFR-003 | 信頼性 | 失敗時に出力パスに不完全なファイルが残らない | 書き出し失敗時、出力パスにファイルが存在しない |
+| NFR-004 | 移植性 | 配布対象の全ターゲットで動作する | 配布 4 ターゲットすべてでビルド・実行できる |
+| NFR-005 | テスト独立性 | HTTP 通信なしでリクエスト組み立てとレスポンス解釈をテストできる | `resolve_text_source` / `format_from_path` / `validate_text` / `check_output_path` / `extract_audio` が通信・ファイル I/O なしで呼び出せる |
 
 # 5. CLI インターフェース
 
@@ -231,14 +234,16 @@ PRD の FR_002_04（「経路が 2 つ以上または 0 個の場合は拒否す
 | `tts` | `TextSource` | `pub` | 解決済みのテキスト取得元 |
 | `tts` | `TtsError` | `pub` | この機能で起きる失敗 |
 | `tts` | `ApiFailure` | `pub` | API の業務エラーの区分（DC_009） |
-| `tts` | `resolve_text_source(...)` | `pub` | 5.3 の規則で経路を決める純粋関数 |
-| `tts` | `format_from_path(&Path)` | `pub` | 拡張子から `AudioFormat` を決める純粋関数 |
-| `tts` | `validate_text(&str)` | `pub` | 空・長さ上限を検査する純粋関数 |
-| `tts` | `check_output_path(&Path, bool, bool)` | `pub` | 出力先の既存ファイルを検査する純粋関数。存在するか（`exists`）と `--force` を引数で受け取る（A-001。ファイルシステムを見るのは呼び出し側） |
-| `tts` | `extract_audio(...)` | `pub` | レスポンスの業務エラーを検査し、音声データを取り出す純粋関数 |
-| `tts` | `send(...)` | `pub` | 境界。API を呼び、レスポンスを返す |
-| `tts` | `write_audio(...)` | `pub` | 境界。音声データをファイルに書き出す |
+| `tts` | `resolve_text_source(text, file, stdin_is_terminal)` | `pub` | 5.3 の規則で経路を決める純粋関数。`stdin_is_terminal` は標準入力が端末かどうか |
+| `tts` | `format_from_path(path)` | `pub` | 拡張子から `AudioFormat` を決める純粋関数 |
+| `tts` | `validate_text(text)` | `pub` | 空・長さ上限を検査する純粋関数 |
+| `tts` | `check_output_path(path, exists, force)` | `pub` | 出力先の既存ファイルを検査する純粋関数。存在するか（`exists`）と `--force` を引数で受け取る（A-001。ファイルシステムを見るのは呼び出し側） |
+| `tts` | `extract_audio(response)` | `pub` | レスポンスの業務エラーを検査し、音声データを取り出す純粋関数 |
+| `tts` | `send(region, token, request)` | `pub` | 境界。API を呼び、レスポンスを返す |
+| `tts` | `write_audio(path, bytes)` | `pub` | 境界。音声データをファイルに書き出す |
 
+**引数名のみを示し、具体的な型（`SynthesisResponse` 等の API リクエスト/レスポンス型を含む）は
+[tts-synthesis_design.md](tts-synthesis_design.md) の 5 節・6 節に委ねます。**
 **`resolve_text_source` / `format_from_path` / `validate_text` / `check_output_path` /
 `extract_audio` が純粋関数であることが NFR-005 と DC_007 の要点です。**
 これらは通信もファイル I/O もせずに単体テストできます。**`send` と `write_audio` だけが
@@ -343,7 +348,7 @@ minimax tts --voice <VOICE_ID> --model <MODEL> --output out.mp3 "読み上げる
 # ファイルから渡す（長文・改行を含む場合）
 minimax tts --voice <VOICE_ID> --model <MODEL> --output out.wav --file script.txt
 
-# パイプで渡す（位置引数と --file の両方が無いときに標準入入力を読む）
+# パイプで渡す（位置引数と --file の両方が無いときに標準入力を読む）
 pbpaste | minimax tts --voice <VOICE_ID> --model <MODEL> --output out.mp3
 
 # 言語を明示する
@@ -452,8 +457,8 @@ stateDiagram-v2
 | IR_001〜IR_003 | 3.2 / 5.2 / 6 |
 | DC_001〜DC_010 | 4.1 のトレーサビリティ表に全件記載。DC_001 / DC_002 / DC_006 / DC_010 の具体は設計書へ委譲 |
 
-**未カバーの要求はありません。** PRD の要求 ID は合計 **33 件**（葉の要求 FR / IR / DC が **29 件**、
-親 requirement ノード `REQ_001`〜`REQ_004` が **4 件**）です。4.1 の表には葉の 29 件が
+**未カバーの要求はありません。** PRD の要求 ID は合計 **36 件**（葉の要求 FR / IR / DC が **31 件**、
+親 requirement ノード `REQ_001`〜`REQ_004` および `FR_003` が **5 件**）です。4.1 の表には葉の 31 件が
 それぞれ実現箇所つきで並んでいます。親ノードは PRD 側の `contains` 関係で葉に分解されているため、
 個別の実装箇所は持たせていません（[credential-management_spec.md](credential-management_spec.md) と同じ扱い）。
 

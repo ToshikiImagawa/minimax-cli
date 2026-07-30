@@ -2,11 +2,11 @@
 id: "design-tts-synthesis"
 title: "音声合成"
 type: "design"
-status: "draft"
+status: "approved"
 sdd-phase: "plan"
 impl-status: "not-implemented"
 created: "2026-07-29"
-updated: "2026-07-29"
+updated: "2026-07-30"
 depends-on: ["spec-tts-synthesis"]
 tags: ["api", "audio", "output", "security", "tts"]
 category: "synthesis"
@@ -87,14 +87,27 @@ risk: "high"
 
 ### 原則からの逸脱
 
-**B-001 / B-002 に関わる逸脱はありません。** 未達 4 件（B-001 の `HTTP_LAYER_CRATES` 確定、
-A-002 の依存グラフ実測 3 件、D-001 の結合テスト範囲）はいずれも**恒久的な原則違反ではなく、
-実装 PR で解消する計画つきの未達**です。CONSTITUTION.md の例外プロセスに従い記録します。
+**B-001 に関わる逸脱・例外はありません。** CONSTITUTION.md および `DESIGN_DOC_TEMPLATE.md` は
+「B-001 に関わる逸脱は認められない」と明記しており、この例外プロセスは B-001 には適用できません。
+B-001 に関する未確定事項（`HTTP_LAYER_CRATES` の追加候補が実測前）は「逸脱」ではなく、
+直下の「未確定の検証項目」で計画つきの実測タスクとして管理します。
+
+**A-002 / D-001 に、性質の異なる 2 種類の逸脱があります。** A-002 の 3 件は依存グラフの実測前で
+あることによる**一時的な未確定**（実装 PR 開始時に解消する）であり、D-001 の 1 件は成功経路を
+結合テストでカバーしないことを**恒久的に受け入れる設計判断**（今後も解消しない）です。
+この 2 種類を同じ表に混在させると前者が「いつか解消される」ことと後者が「解消されない」ことの
+違いが埋没するため、表を分けて記録します。
 
 | 原則 ID | 逸脱内容 | 理由 | 補償手段 | 解消条件 | 追跡 |
 |:---|:---|:---|:---|:---|:---|
-| B-001 / A-002 | `HTTP_LAYER_CRATES` の追加候補と `deny.toml` 関連 3 項目（ライセンス・禁止クレート・Windows API）が実測前の推測 | 依存グラフはクレートを実際に追加してビルドしなければ確定しない（CONSTITUTION.md の「記述の裏取り」） | 実装 PR の最初のタスクとして `cargo tree -e normal` と `cargo deny check` を実行し、確定後にチェックを `[x]` に更新する | 実装 PR のマージ時に解消 | 本機能の実装 PR |
+| A-002 | `deny.toml` 関連 3 項目（ライセンス・禁止クレート・Windows API）が実測前の推測（詳細は 3.2 節） | 依存グラフはクレートを実際に追加してビルドしなければ確定しない（CONSTITUTION.md の「記述の裏取り」） | 実装 PR の最初のタスクとして `cargo tree -e normal` と `cargo deny check` を実行し、確定後にチェックを `[x]` に更新する | **実装 PR のマージ時に解消する一時的な未確定** | 本機能の実装 PR |
 | D-001 | 成功経路（終了コード 0）が結合テストでカバーされず、単体テスト + 手動確認で担保される | 実 API 呼び出しは課金を伴い、トークンが必要で CI で動かせない（8.1） | `extract_audio` / `write_audio` の単体テストで内部ロジックを担保し、実際の API 呼び出しは手動確認手順に従う | **恒久的な妥協として受け入れる**（HTTP モックサーバーは技術スタック制約により導入しない。9 節 D-6） | なし（設計判断として確定） |
+
+### 未確定の検証項目（B-001。実装 PR 開始時の実測で解消する）
+
+| 原則 ID | 未確定の内容 | 解消方法 | 期限 |
+|:---|:---|:---|:---|
+| B-001 | `HTTP_LAYER_CRATES` への追加候補（3.3 節）は `cargo tree` 実測前の推測 | `cargo tree -e normal` で依存グラフを確定し、`HTTP_LAYER_CRATES` を更新して原則準拠チェックリストの該当項目を `[x]` にする | 実装 PR の最初のタスク |
 
 ---
 
@@ -356,7 +369,10 @@ pub enum TtsError {
     #[error("the text to synthesize is empty")]
     EmptyText,
     /// テキストが長さ上限を超えた（FR-006）。
-    #[error("the text is {chars} characters, which is at or above the limit of {limit}")]
+    #[error(
+        "the text is {chars} characters, at or above the {limit}-character limit for the \
+         synchronous API; split the text, or use the asynchronous API (not implemented by this CLI)"
+    )]
     TextTooLong { chars: usize, limit: usize },
     /// 出力パスの拡張子が未対応（FR-004）。
     #[error("unsupported output extension: {extension:?} (expected mp3, wav, or flac)")]
@@ -571,6 +587,7 @@ impl ApiFailure {
 > **この対応表は公開ドキュメントの調査結果に基づく未実測の情報です。**
 > `deny.toml` のライセンス実測（9.2）と同様、**実装 PR で実際の API レスポンスと照合し、
 > 齟齬があれば表を訂正してから実装する**ことを必須のタスクとします（CLAUDE.md の「事実確認ルール」）。
+> この未実測課題は 9.2 節の未解決課題表にも記録しています。
 
 ## 6.3. 境界
 
@@ -689,7 +706,7 @@ pub fn write_audio(path: &Path, bytes: &[u8]) -> Result<(), TtsError>;
 | D-9 | `--model` の値の検証 | clap の列挙で固定 / 文字列のまま | **文字列のまま** | 列挙で固定すると MiniMax の新モデルが本 CLI のリリースまで使えない。誤った値は API 側が弾く |
 | D-10 | 既存ファイルの扱い | 無条件上書き / 拒否 + `--force` | **拒否 + `--force`** | AI エージェントに実行させると前の成果物を黙って消す事故になる。破壊的操作は明示的な指定を要求する |
 | D-11 | 送信前検査の順序 | 認証情報を先に読む / 検査を先に | **検査を先に**（4.3） | 課金は発生しないが、認証情報の読み出しは OS のストアに触るため、引数の誤りで落ちる実行では不要 |
-| D-12 | `src/error.rs` の `Error` への統合 | `TtsError` を独立させたまま `anyhow` で受ける / `Error::Tts(TtsError)` として集約する | **`Error::Tts(TtsError)` として集約する** | CONSTITUTION.md が「TTS 実装時に `run()` を型付きエラーへ寄せ、`anyhow` は `main_entry` に閉じる」ことを要求している。[credential-management_design.md](credential-management_design.md) の D-7（`Error::Credential` の追加）と同じ形に揃え、`run()` の tts arm も型付きエラーを返すようにする |
+| D-12 | `src/error.rs` の `Error` への統合 | `TtsError` を独立させたまま `anyhow` で受ける / `Error::Tts(TtsError)` として集約する | **`Error::Tts(TtsError)` として集約する** | CONSTITUTION.md が「TTS 実装時に `run()` を型付きエラーへ寄せ、`anyhow` は `main_entry` に閉じる」ことを要求している。[credential-management_design.md](credential-management_design.md) の「9.1. 決定事項」D-7（`Error::Credential` の追加）と同じ形に揃え、`run()` の tts arm も型付きエラーを返すようにする |
 
 ## 9.2. 未解決の課題
 
@@ -698,6 +715,7 @@ pub fn write_audio(path: &Path, bytes: &[u8]) -> Result<(), TtsError>;
 | **`rustls` の依存グラフに `deny.toml` の allow に無いライセンス（BSD-3-Clause / ISC 等）が含まれる可能性** | **高** | 実装 PR の最初のタスクで `cargo deny check licenses` を実測し、必要なら同じ PR で allow に追記する（3.2） |
 | `reqwest` 0.12 系の MSRV が 1.85 を超える可能性 | 中 | 実測する。超える場合はバージョンを下げる（MSRV は上げない。PRD DC_010） |
 | `HTTP_LAYER_CRATES` に追加すべきクレートの正確な一覧 | **高** | `cargo tree -e normal` で実測してから追加する（3.3）。**推測で列挙して実測を省略してはならない** |
+| 業務エラーコード対応表（6.2）が公開ドキュメントの調査結果に基づく未実測の情報である | 中 | 実装 PR で実際の API レスポンスと照合し、齟齬があれば表を訂正してから実装する（6.2） |
 | API のテキスト長上限の数え方 | 低 | D-5 のとおり char 数で近似する。境界付近の挙動は手動確認で把握する |
 | `usage_characters`（課金対象文字数）を利用者に見せるか | 低 | stderr に出す。stdout には出さない（成果物ではない） |
 | 音声形式ごとの API 側の制約（ビットレートは mp3 のみ有効など） | 低 | ビットレートを露出しないため現状は影響しない。パラメータを増やす際に再検討する |
