@@ -51,6 +51,10 @@ allow = [
     "Apache-2.0 WITH LLVM-exception",
     "MIT",
     "Unicode-3.0",
+    # reqwest（rustls-tls）の依存グラフで実測して追加（tts-synthesis 実装 PR）。
+    "BSD-3-Clause", # subtle
+    "ISC",          # ring / rustls-webpki / untrusted
+    "CDLA-Permissive-2.0", # webpki-roots
 ]
 exceptions = []
 

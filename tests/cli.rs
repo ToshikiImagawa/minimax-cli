@@ -40,14 +40,19 @@ fn unknown_flag_fails_with_message_on_stderr() {
         .stderr(predicate::str::contains("--no-such-flag"));
 }
 
-#[test]
-fn tts_is_not_implemented_yet() {
-    bin()
-        .args(["tts", "hello"])
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("not implemented"));
-}
+/// アプリケーション層のエラー（clap の引数検証エラーではないもの）を安定して起こす引数。
+///
+/// 未対応の拡張子は認証情報ストアや標準入力に触れる前（送信前検査。design 4.3 節）に
+/// 失敗するため、ログ・stdout の出し分けを検証する上で環境に依存しない。
+const UNSUPPORTED_EXTENSION_ARGS: [&str; 7] = [
+    "tts",
+    "--voice",
+    "v",
+    "--model",
+    "m",
+    "--output",
+    "out.unsupported",
+];
 
 /// 診断出力を stdout に載せない設計の回帰テスト。
 ///
@@ -56,7 +61,8 @@ fn tts_is_not_implemented_yet() {
 #[test]
 fn diagnostics_never_go_to_stdout() {
     bin()
-        .args(["tts", "hello"])
+        .args(UNSUPPORTED_EXTENSION_ARGS)
+        .arg("hello")
         .assert()
         .failure()
         .stdout(predicate::str::is_empty());
@@ -71,7 +77,8 @@ fn diagnostics_never_go_to_stdout() {
 fn log_off_silences_the_error_message_but_keeps_the_exit_code() {
     bin()
         .env("MINIMAX_LOG", "off")
-        .args(["tts", "hello"])
+        .args(UNSUPPORTED_EXTENSION_ARGS)
+        .arg("hello")
         .assert()
         .failure()
         .stdout(predicate::str::is_empty())
@@ -83,7 +90,8 @@ fn log_off_silences_the_error_message_but_keeps_the_exit_code() {
 fn rust_log_off_also_silences_the_error_message() {
     bin()
         .env("RUST_LOG", "off")
-        .args(["tts", "hello"])
+        .args(UNSUPPORTED_EXTENSION_ARGS)
+        .arg("hello")
         .assert()
         .failure()
         .stderr(predicate::str::is_empty());
@@ -96,8 +104,9 @@ fn minimax_log_takes_precedence_over_rust_log() {
     bin()
         .env("MINIMAX_LOG", "error")
         .env("RUST_LOG", "off")
-        .args(["tts", "hello"])
+        .args(UNSUPPORTED_EXTENSION_ARGS)
+        .arg("hello")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("not implemented"));
+        .stderr(predicate::str::contains("unsupported"));
 }

@@ -10,8 +10,6 @@
 
 [English README](README.md)
 
-> **現状: 一部実装フェーズ。** 認証情報管理（`auth login` / `auth status` / `auth logout`）は動作します。音声合成（`tts`）は未実装です。
-
 ## 特徴
 
 - **認証情報が AI エージェントに渡らない。** トークンは CLI プロセス内で OS のセキュアな保存領域から読み出します。`--token` フラグは用意しません。プロセス引数は他プロセスから読める上、AI エージェントがコマンドを組み立てるとトークンが会話ログに永久に残るためです。
@@ -56,6 +54,15 @@ cargo install --git https://github.com/ToshikiImagawa/minimax-cli.git
 ```sh
 minimax --help
 minimax --version
+
+# API トークンを一度だけ登録する（標準入力から読み込む。--token フラグは無い）
+echo "$MY_MINIMAX_TOKEN" | minimax auth login --region global
+
+# 読み上げ音声ファイルを生成する。音声形式（mp3/wav/flac）は --output の拡張子から決まる。
+minimax tts --voice <VOICE_ID> --model <MODEL> --output out.mp3 "こんにちは"
+
+# 生成したパスが stdout の 1 行だけなので、そのまま次の処理に渡せる。
+afplay "$(minimax tts --voice <VOICE_ID> --model <MODEL> --output out.mp3 'こんにちは')"
 ```
 
 引数なしで `minimax` を実行すると help を表示します。
@@ -74,11 +81,29 @@ minimax --version
 
 | コマンド | 説明 |
 |:---|:---|
-| `tts <TEXT>` | テキストを読み上げ音声ファイルに変換する（**未実装**） |
+| `tts [OPTIONS] --voice <ID> --model <NAME> --output <PATH> [TEXT]` | テキストを読み上げ音声ファイルに変換する |
 | `auth login --region <REGION>` | 標準入力から読み取った API トークンを登録する。`--region`（`global` または `china`）は必須。既存の登録は確認無しで上書きする |
 | `auth status` | トークンの登録有無と登録済みリージョンを表示する（リージョンを stdout に出力） |
 | `auth logout` | 登録済みの API トークンを削除する。未登録でも成功として扱う |
 | `help` | サブコマンドの help を表示する |
+
+#### `tts` のオプション
+
+| オプション | 必須 | 説明 |
+|:---|:---|:---|
+| `[TEXT]` | 条件付き | 読み上げるテキスト |
+| `--file <PATH>` | 条件付き | 読み上げるテキストをファイルから読み込む |
+| `--voice <ID>` | 必須 | 音声合成に使う voice ID |
+| `--model <NAME>` | 必須 | 音声合成に使うモデル |
+| `--output <PATH>` | 必須 | 書き出す音声ファイルのパス |
+| `--language <LANG>` | 省略可 | 発音のための言語ヒント |
+| `--force` | 省略可 | 出力先に既存のファイルがある場合に上書きする |
+
+`[TEXT]` / `--file` / 標準入力のうち、テキストの取得元はちょうど 1 つだけ指定してください。
+2 つ以上指定した場合や、標準入力が端末に接続されたまま何も指定しなかった場合は拒否されます。
+音声形式（`mp3` / `wav` / `flac`）は `--output` の拡張子から決まります。`--token` フラグは無く、
+トークンは常に `auth login` で登録した OS の資格情報ストアから読み出します。成功時は生成した
+音声ファイルのパスが stdout に 1 行だけ出力され、失敗時は stdout が空のまま終了コード 1 で終わります。
 
 > [!NOTE]
 > Linux ではトークンをカーネルキーリングに保存するため、**再起動すると失われます**。その後は `auth status` が未登録として報告するので、`auth login` を再実行してください。

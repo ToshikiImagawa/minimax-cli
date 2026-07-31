@@ -3,6 +3,8 @@
 //! `--version` は `#[command(version)]` により Cargo.toml の `version` を参照するため、
 //! バージョンの真実は Cargo.toml 1 箇所に集約される。
 
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand, ValueEnum};
 
 /// Generate speech audio files with the MiniMax AI TTS API.
@@ -20,10 +22,28 @@ pub struct Cli {
 /// サブコマンド。
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Convert text into a speech audio file (not implemented yet)
+    /// Convert text into a speech audio file
     Tts {
         /// Text to synthesize
-        text: String,
+        text: Option<String>,
+        /// Read the text to synthesize from a file
+        #[arg(long)]
+        file: Option<PathBuf>,
+        /// Voice ID to synthesize with
+        #[arg(long)]
+        voice: String,
+        /// Model to use for synthesis
+        #[arg(long)]
+        model: String,
+        /// Path of the audio file to write
+        #[arg(long)]
+        output: PathBuf,
+        /// Language hint for pronunciation
+        #[arg(long)]
+        language: Option<String>,
+        /// Overwrite the output file if it already exists
+        #[arg(long)]
+        force: bool,
     },
     /// Manage the MiniMax API credential
     Auth {

@@ -10,8 +10,6 @@ Generate speech audio files with the [MiniMax AI](https://platform.minimax.io/) 
 
 [日本語版 README](README.ja.md)
 
-> **Status: partial implementation.** Credential management (`auth login` / `auth status` / `auth logout`) works today. Text-to-speech (`tts`) is not implemented yet.
-
 ## Features
 
 - **Credentials never reach AI agents.** The token is read from the OS secure store inside the CLI process. There is no `--token` flag, because process arguments are readable by other processes and an AI agent that builds the command would leave the token in its conversation log forever.
@@ -56,6 +54,15 @@ cargo install --git https://github.com/ToshikiImagawa/minimax-cli.git
 ```sh
 minimax --help
 minimax --version
+
+# Register your API token once (read from stdin; there is no --token flag)
+echo "$MY_MINIMAX_TOKEN" | minimax auth login --region global
+
+# Generate a speech audio file. The output format (mp3/wav/flac) is inferred from --output.
+minimax tts --voice <VOICE_ID> --model <MODEL> --output out.mp3 "Hello, world!"
+
+# The generated path is the only line on stdout, so it can be piped directly.
+afplay "$(minimax tts --voice <VOICE_ID> --model <MODEL> --output out.mp3 'Hello, world!')"
 ```
 
 Running `minimax` with no arguments prints the help text.
@@ -74,11 +81,29 @@ Running `minimax` with no arguments prints the help text.
 
 | Command | Description |
 |:---|:---|
-| `tts <TEXT>` | Convert text into a speech audio file (**not implemented yet**) |
+| `tts [OPTIONS] --voice <ID> --model <NAME> --output <PATH> [TEXT]` | Convert text into a speech audio file |
 | `auth login --region <REGION>` | Register an API token read from standard input. `--region` is required (`global` or `china`); an existing token is overwritten without confirmation |
 | `auth status` | Show whether a token is registered and for which region (prints the region to stdout) |
 | `auth logout` | Remove the registered API token. Succeeds even if none was registered |
 | `help` | Print help for a subcommand |
+
+#### `tts` options
+
+| Option | Required | Description |
+|:---|:---|:---|
+| `[TEXT]` | conditional | Text to synthesize |
+| `--file <PATH>` | conditional | Read the text to synthesize from a file |
+| `--voice <ID>` | yes | Voice ID to synthesize with |
+| `--model <NAME>` | yes | Model to use for synthesis |
+| `--output <PATH>` | yes | Path of the audio file to write |
+| `--language <LANG>` | no | Language hint for pronunciation |
+| `--force` | no | Overwrite the output file if it already exists |
+
+Exactly one of `[TEXT]`, `--file`, or standard input must supply the text — specifying more than one,
+or none while standard input is a terminal, is rejected. The output format (`mp3` / `wav` / `flac`) is
+determined by the `--output` extension. There is no `--token` flag; the token is always read from the
+OS credential store via `auth login`. On success, the path to the generated audio file is printed to
+stdout as the only line; on any failure, stdout is empty and the exit code is 1.
 
 > [!NOTE]
 > On Linux, the token is stored in the kernel keyring and is **lost on reboot**. `auth status` will report it as unregistered afterward; re-run `auth login` to restore it.

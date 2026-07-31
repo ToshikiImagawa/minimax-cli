@@ -281,7 +281,11 @@ pub enum ApiFailure {
     /// アカウントの残高が不足している。
     InsufficientBalance,
     /// レート制限に達した。自動再送はしない（FR-010）。
-    RateLimited,
+    ///
+    /// API 由来の `detail` を保持する。実装時の実測で、この区分の一部のコード
+    /// （例: Token Plan の枠超過）は「待てば解決する」とは限らないと判明したため、
+    /// 固定文言ではなく API のメッセージをそのまま利用者に見せる（design 6.2 節）。
+    RateLimited { detail: String },
     /// 入力に起因するエラー（不正なパラメータ・不可視文字の割合など）。
     InvalidInput { detail: String },
     /// 上記に当てはまらないエラー。

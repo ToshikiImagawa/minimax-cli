@@ -28,6 +28,18 @@ impl Region {
 /// `Display` は実装しない（B-001 / PRD DC_002）。
 pub struct ApiToken(SecretString);
 
+impl ApiToken {
+    /// トークンの実値を返す。呼び出し側は値をログ・エラーメッセージに載せてはならない（B-001）。
+    ///
+    /// `pub(crate)` に留めるのは、この値を扱えるのはクレート内部（`tts::client` が
+    /// 認証ヘッダを組み立てる箇所）だけに限るため。
+    pub(crate) fn expose(&self) -> &str {
+        use secrecy::ExposeSecret;
+
+        self.0.expose_secret()
+    }
+}
+
 impl std::fmt::Debug for ApiToken {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("ApiToken(<redacted>)")

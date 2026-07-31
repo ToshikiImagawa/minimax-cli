@@ -9,7 +9,8 @@ OS のセキュアな保存領域に置いた API トークンを使い、**AI �
 読み上げ音声ファイル（TTS）を生成することを目的とする。
 
 - コマンド名は `minimax`（crate 名 `minimax-cli`）
-- 現在は環境構築フェーズ。`--version` / `--help` が動く骨格のみで TTS は未実装
+- v0.1.0 のスコープ（認証情報管理 + 単発 TTS）は実装済み。`auth login` / `auth status` /
+  `auth logout` / `tts` が動作する
 - 配布は cargo-dist（`dist`）に委譲し、4 ターゲット（macOS arm64、Linux arm64/x64、Windows x64）を GitHub Release で配る。
   Intel Mac（`x86_64-apple-darwin`）は配布対象外
 - crates.io へは publish しない（`publish = false`）。crates.io の `minimax-cli` は無関係な第三者のクレート
@@ -103,8 +104,9 @@ dist-guard は grep のみで cargo を実行しない。
 
 - **方針**: ライブラリ層（`cli.rs` / `logging.rs` 等の機能モジュール）は `thiserror` で型付きエラーを定義し、
   バイナリ層（`main_entry`）が `anyhow` で受けて表示・終了コードに変換する
-- **現状（環境構築フェーズ）**: `src/error.rs` の `Error` は骨格のみで未使用。`lib.rs::run()` は暫定的に
-  `anyhow::Result` を返している。TTS 実装時に `run()` の戻り値を型付きエラーに寄せ、`anyhow` は `main_entry` に閉じる
+- **現状**: `lib.rs::run()` および各サブコマンドの実処理関数（`auth_login` 等・`tts_run`）は
+  `Result<(), error::Error>` を返す。`main_entry` が `run(&args).map_err(anyhow::Error::from)` の
+  1 箇所だけで `anyhow` に変換し、表示・終了コードに落とす。`anyhow` を使うのはこの 1 行だけに保つ
 - `unwrap()` / `expect()` はテストコード以外で使わない。実行時入力・I/O・環境依存の値には使わない
   - **現状、本番コード（`src/*.rs` の `#[cfg(test)]` より前）の `unwrap` / `expect` は 0 件。**
     `logging.rs` を `filter::Targets` の AND 結合に変えた際に、`"reqwest=warn".parse().expect(...)` 5 箇所が
