@@ -4,9 +4,9 @@ title: "音声合成"
 type: "design"
 status: "approved"
 sdd-phase: "plan"
-impl-status: "not-implemented"
+impl-status: "implemented"
 created: "2026-07-29"
-updated: "2026-07-30"
+updated: "2026-07-31"
 depends-on: ["spec-tts-synthesis"]
 tags: ["api", "audio", "output", "security", "tts"]
 category: "synthesis"
@@ -31,10 +31,14 @@ risk: "high"
 - [x] トークンを保持する型の `Display` / `Debug` を封じている（`credential::ApiToken` をそのまま使う）
 - [x] エラーメッセージ・`Display` / `Debug` 実装にトークンが載らない（`TtsError` はトークンを保持しない）
 - [x] 認証情報を環境変数で渡す運用を前提にしていない
-- [ ] **未達。本機能で最も重要な B-001 対応。** HTTP クライアント / TLS クレートを追加するため
-      `src/logging.rs` の `HTTP_LAYER_CRATES` に追加する必要がある
-      → **3.3 の追加候補は実測前の推測。`cargo tree -e normal` で確定するまで未達のまま**
-      （9.2 の未解決課題を参照。実装 PR の必須タスクとする）
+- [x] **実測済み。`HTTP_LAYER_CRATES` の追加は不要と判明した。**
+      `cargo tree -e normal -i tracing` / `-i log` で依存グラフ上の直接依存を確認した結果、
+      reqwest の依存グラフで `tracing` クレートに直接依存するのは `hyper_util` のみ、
+      `log` クレートに直接依存するのは `reqwest` のみだった（`hyper` / `rustls` / `ring` /
+      `tower` / `tower-http` / `hyper-rustls` / `rustls-webpki` / `rustls-pki-types` /
+      `webpki-roots` / `tokio` はいずれもログファサードに依存しておらず、イベントを一切出せない）。
+      両クレートは既に `HTTP_LAYER_CRATES` に含まれているため、3.3 節の追加候補
+      （`hyper_rustls`/`tower`/`tower_http` 等）はいずれも実測で不要と判明した（詳細は 3.3 節）
 
 ### B-002: stdout は成果物専用に保つ
 
@@ -57,13 +61,17 @@ risk: "high"
 ### A-002: セキュリティに関わる仕組みを自作しない
 
 - [x] TLS は rustls（`reqwest` は `default-features = false` + `rustls-tls`）
-- [ ] **未達（要実測）**: `openssl` / `openssl-sys` を依存グラフに持ち込まないこと
-      → `default-features = false` により入らない見込みだが、3.2 の `cargo tree` 実測で確定する
+- [x] **実測済み**: `openssl` / `openssl-sys` は依存グラフに存在しない
+      （`cargo tree -e normal -i openssl` / `-i openssl-sys` がいずれも「該当パッケージなし」）
 - [x] **該当なし**: シークレットの保存は credential 側
-- [ ] **未達（要実測）**: Windows API は `windows-sys` のみで、`windows` クレートを引き込まないこと
-      → 3.2 で実測する
-- [ ] **未達（要実測）**: 追加した依存のライセンスが `deny.toml` の `[licenses] allow` に含まれること
-      → 3.2 に未確定として記載。`rustls` の依存グラフに allow 外のライセンスが含まれる可能性がある
+- [x] **実測済み**: `windows-sys` 系（`windows-sys` / `windows-targets` / `windows_*` アーキ別クレート）
+      のみで、`windows` クレート自体は依存グラフに存在しない（`Cargo.lock` に `name = "windows"` の
+      パッケージが無い）
+- [x] **実測済み**: `cargo deny check licenses` を実行し、`ISC`（`ring` / `rustls-webpki` /
+      `untrusted`）、`BSD-3-Clause`（`subtle`）、`CDLA-Permissive-2.0`（`webpki-roots`）の
+      3 ライセンスが新たに必要と判明した。3.2 節が推測していた候補（BSD-3-Clause / ISC）に加え、
+      `webpki-roots` の `CDLA-Permissive-2.0` は推測に無かった実測結果。`deny.toml` の
+      `[licenses] allow` に 3 件とも追記し、`cargo deny check` が全項目 `ok` になることを確認した
 
 ### D-001: 外形をテストで固定する
 
@@ -89,47 +97,39 @@ risk: "high"
 
 **B-001 に関わる逸脱・例外はありません。** CONSTITUTION.md および `DESIGN_DOC_TEMPLATE.md` は
 「B-001 に関わる逸脱は認められない」と明記しており、この例外プロセスは B-001 には適用できません。
-B-001 に関する未確定事項（`HTTP_LAYER_CRATES` の追加候補が実測前）は「逸脱」ではなく、
-直下の「未確定の検証項目」で計画つきの実測タスクとして管理します。
+B-001 に関する未確定事項（`HTTP_LAYER_CRATES` の追加候補）は実装 PR の最初のタスクで
+`cargo tree -e normal` により実測し、追加不要と確定した（3.3 節）。
 
-**A-002 / D-001 に、性質の異なる 2 種類の逸脱があります。** A-002 の 3 件は依存グラフの実測前で
-あることによる**一時的な未確定**（実装 PR 開始時に解消する）であり、D-001 の 1 件は成功経路を
-結合テストでカバーしないことを**恒久的に受け入れる設計判断**（今後も解消しない）です。
-この 2 種類を同じ表に混在させると前者が「いつか解消される」ことと後者が「解消されない」ことの
-違いが埋没するため、表を分けて記録します。
+**D-001 に 1 件、恒久的に受け入れる設計判断としての逸脱があります。** A-002 の 3 件
+（ライセンス・禁止クレート・Windows API）は実装 PR の最初のタスクで実測し、いずれも解消済み
+（3.2 節）。D-001 の 1 件は成功経路を結合テストでカバーしないことを**恒久的に受け入れる設計判断**
+（今後も解消しない）のため、単独の表として記録します。
 
 | 原則 ID | 逸脱内容 | 理由 | 補償手段 | 解消条件 | 追跡 |
 |:---|:---|:---|:---|:---|:---|
-| A-002 | `deny.toml` 関連 3 項目（ライセンス・禁止クレート・Windows API）が実測前の推測（詳細は 3.2 節） | 依存グラフはクレートを実際に追加してビルドしなければ確定しない（CONSTITUTION.md の「記述の裏取り」） | 実装 PR の最初のタスクとして `cargo tree -e normal` と `cargo deny check` を実行し、確定後にチェックを `[x]` に更新する | **実装 PR のマージ時に解消する一時的な未確定** | 本機能の実装 PR |
-| D-001 | 成功経路（終了コード 0）が結合テストでカバーされず、単体テスト + 手動確認で担保される | 実 API 呼び出しは課金を伴い、トークンが必要で CI で動かせない（8.1） | `extract_audio` / `write_audio` の単体テストで内部ロジックを担保し、実際の API 呼び出しは手動確認手順に従う | **恒久的な妥協として受け入れる**（HTTP モックサーバーは技術スタック制約により導入しない。9 節 D-6） | 本機能の実装 Issue（[#8](https://github.com/ToshikiImagawa/minimax-cli/issues/8)）。恒久的な設計判断として本設計書に記録済みだが、CONSTITUTION.md の例外プロセスに従い追跡先を明示する |
-
-### 未確定の検証項目（B-001。実装 PR 開始時の実測で解消する）
-
-| 原則 ID | 未確定の内容 | 解消方法 | 期限 |
-|:---|:---|:---|:---|
-| B-001 | `HTTP_LAYER_CRATES` への追加候補（3.3 節）は `cargo tree` 実測前の推測 | `cargo tree -e normal` で依存グラフを確定し、`HTTP_LAYER_CRATES` を更新して原則準拠チェックリストの該当項目を `[x]` にする | 実装 PR の最初のタスク |
+| D-001 | 成功経路（終了コード 0）に加え、「標準入力が端末」「認証情報が未登録」の 2 経路が結合テストでカバーされず、単体テスト + 手動確認で担保される | 成功経路は実 API 呼び出しが課金を伴い CI で動かせない（8.1）。「標準入力が端末」は pty 無しで 3 OS CI から再現できない（credential-management の D-10 と同じ理由）。「認証情報が未登録」は実際の OS 資格情報ストアに触れるため開発機の状態に依存する（`tests/auth.rs` が同じ理由で `auth status`/`auth logout` を対象外にしている前例に揃える） | `extract_audio` / `write_audio` の単体テストで成功経路の内部ロジックを担保し、実際の API 呼び出しは手動確認手順に従う。「標準入力が端末」「認証情報が未登録」はそれぞれ `src/tts.rs` / `src/credential.rs` の単体テストが担保する | **恒久的な妥協として受け入れる**（HTTP モックサーバーは技術スタック制約により導入しない。9 節 D-6） | 本機能の実装 Issue（[#8](https://github.com/ToshikiImagawa/minimax-cli/issues/8)）。恒久的な設計判断として本設計書に記録済みだが、CONSTITUTION.md の例外プロセスに従い追跡先を明示する |
 
 ---
 
 # 1. 実装ステータス
 
-**ステータス:** 🔴 未実装
+**ステータス:** 🟢 実装済み
 
 ## 1.1. 実装進捗
 
 | モジュール/機能 | ステータス | 備考 |
 |:---|:---|:---|
-| `src/tts.rs`（純粋ロジック・型） | 🔴 | 新規 |
-| `src/tts/client.rs`（HTTP 境界） | 🔴 | 新規 |
-| `src/tts/writer.rs`（書き出し境界） | 🔴 | 新規 |
-| `src/logging.rs` の `HTTP_LAYER_CRATES` | 🔴 | **追加が必須**（B-001） |
-| `src/cli.rs` の `tts` サブコマンド | 🔴 | 既存のスタブを実装に置き換える |
-| `src/lib.rs` の `run()` の arm | 🔴 | `anyhow::bail!` のスタブを置き換える |
-| `tests/tts.rs`（結合テスト） | 🔴 | 新規テストバイナリ |
-| 両 README の CLI リファレンス表 | 🔴 | |
-| `CHANGELOG.md` の `[Unreleased]` | 🔴 | 英語 1 行 |
+| `src/tts.rs`（純粋ロジック・型） | 🟢 | 実装済み |
+| `src/tts/client.rs`（HTTP 境界） | 🟢 | 実装済み |
+| `src/tts/writer.rs`（書き出し境界） | 🟢 | 実装済み |
+| `src/logging.rs` の `HTTP_LAYER_CRATES` | 🟢 | 実測の結果、追加不要と確定（3.3 節） |
+| `src/cli.rs` の `tts` サブコマンド | 🟢 | 実装済み |
+| `src/lib.rs` の `run()` の arm | 🟢 | 実装済み。`run()` 自体も型付きエラー（`Result<(), Error>`）へ移行済み |
+| `tests/tts.rs`（結合テスト） | 🟢 | 実装済み |
+| 両 README の CLI リファレンス表 | 🟢 | 更新済み |
+| `CHANGELOG.md` の `[Unreleased]` | 🟢 | 追加済み |
 
-**前提:** [credential-management_design.md](credential-management_design.md) の実装が先に必要です。
+**前提:** [credential-management_design.md](credential-management_design.md) の実装が完了しています。
 
 ---
 
@@ -170,47 +170,74 @@ CONSTITUTION.md が固定している領域（HTTP / TLS = `reqwest` + rustls）
 **API キーとホストが一致しないと認証エラーになります。** そのため `Region` からホストを導出し、
 両者を独立に指定できる形にしません。
 
-## 3.2. 依存追加時の検証結果
+## 3.2. 依存追加時の検証結果（実測済み）
 
-- [ ] **`deny.toml` の `[licenses] allow` に無いライセンスが増えるか** → **未確定。実装時に実測する。**
-      `rustls` の依存グラフには `subtle`（BSD-3-Clause）や `untrusted`（ISC）といった
-      allow に無いライセンスのクレートが含まれる可能性がある。
-      **実装 PR で `cargo deny check licenses` を回し、必要なら同じ PR で `deny.toml` の
-      `[licenses] allow` に追記する**（CONSTITUTION.md は「依存追加で新しいライセンスが出たら
-      その時点で追記する」方針）
-- [ ] **`[bans]` の禁止クレートを推移的に引き込まないか** → **要実測。**
-      `default-features = false` により `openssl-sys` は入らない見込み。
-      `windows` クレート（`windows-sys` ではない方）が入らないことを `cargo tree` で確認する
-- [ ] **MSRV が `rust-version` 以下か** → **要実測。**`reqwest` 0.12 系と `rustls` の MSRV を確認する。
-      超える場合は MSRV を上げずにバージョンを下げる（PRD DC_010 は MSRV 引き上げを禁じている）
-- [ ] **配布 4 ターゲットすべてでビルドできるか** → rustls は pure Rust のため見込みは良いが、
-      `cross-check` ジョブで確認する
-- [ ] **`Cargo.lock` を更新してコミットする**
+- [x] **`deny.toml` の `[licenses] allow` に無いライセンスが増えるか** →
+      **増えた。** `cargo deny check licenses` を実行した結果、`ISC`（`ring` / `rustls-webpki` /
+      `untrusted`）、`BSD-3-Clause`（`subtle`）、`CDLA-Permissive-2.0`（`webpki-roots`。
+      推測時には想定していなかった）の 3 ライセンスが必要だった。`deny.toml` の
+      `[licenses] allow` に追記済みで、`cargo deny check` は全項目 `ok`
+- [x] **`[bans]` の禁止クレートを推移的に引き込まないか** →
+      **引き込まない。** `cargo tree -e normal -i openssl` / `-i openssl-sys` はいずれも
+      該当パッケージなし。`windows` クレート自体も `Cargo.lock` に存在せず、
+      `windows-sys` 系のみ（deny.toml の既存 `skip-tree` で許容済み）
+- [x] **MSRV が `rust-version` 以下か** →
+      **超えない。** `RUSTUP_TOOLCHAIN=1.85 cargo check --locked --all-targets --all-features`
+      が成功した。`reqwest` 0.12.28 / `rustls` 0.23.43 とも MSRV 1.85 で問題なし
+- [x] **配布 4 ターゲットすべてでビルドできるか** →
+      **ネイティブ 3 ターゲット + MSRV は確認済み。クロスターゲットの `cargo check` には
+      クロス C コンパイラが必要と判明した。** `ring`（rustls の既定の暗号バックエンド）は
+      pure Rust ではなく C + アセンブリを含む。`aarch64-unknown-linux-gnu` への
+      `cargo check --target` はリンクしない（クロスリンカは不要）が、`ring` の `build.rs` が
+      その C コードを実際にクロスコンパイルするため**クロス gcc が必要**（当初の想定は誤り）。
+      CI の `cross-check` ジョブに `gcc-aarch64-linux-gnu` を導入するステップを追加した
+      （`.github/workflows/ci.yml`）。実際の配布ビルド（`dist build`）は
+      `dist-workspace.toml` の `[dist.github-custom-runners]` により各ターゲットのネイティブ
+      ランナー（`aarch64-unknown-linux-gnu` は `ubuntu-24.04-arm`）で実行されるため、
+      この問題を元々回避できている
+- [x] **`Cargo.lock` を更新してコミットする** → 依存追加時に自動更新済み
 
-> **この節のチェックが未確定なのは意図的です。** クレートの依存グラフは実測せずに断定できません
-> （CONSTITUTION.md の「記述の裏取り」）。実装 PR の最初のタスクをこの実測にします。
+> この節はクレートを実際に追加してビルド・実測した結果です（CONSTITUTION.md の「記述の裏取り」）。
 
-## 3.3. `HTTP_LAYER_CRATES` への追加（B-001 の中核）
+## 3.3. `HTTP_LAYER_CRATES` への追加（B-001 の中核。実測済み・追加不要と判明）
 
 `src/logging.rs` は、環境変数由来の `EnvFilter` と HTTP レイヤを `warn` で打ち止めにする
 `filter::Targets` を `FilterExt::and` で AND 結合しています。現在の対象は
 `reqwest` / `hyper` / `hyper_util` / `h2` / `rustls` です。
 
-`reqwest` を実際に導入すると、これら以外にもワイヤレベルの情報をログに出しうるクレートが
-依存グラフに入ります。**追加漏れがあると、ログフィルタの指定次第で `Authorization` ヘッダが
-stderr に出ます。**
+**実測方法:** `Cargo.lock` の各パッケージの `dependencies` を確認し、`cargo tree -e normal -i tracing`
+/ `-i log` で「`tracing` / `log`（ログファサード）に直接依存しているクレートはどれか」を洗い出しました。
+ログファサードに依存していないクレートは、そもそもログイベントを一切出せません（`tracing::trace!` や
+`log::debug!` を呼べない）。
 
-| 追加候補 | 理由 |
-|:---|:---|
-| `hyper_rustls` | TLS ハンドシェイクと接続のログ |
-| `tower` / `tower_http` | `reqwest` のミドルウェア層。リクエスト/レスポンスのログを出す機能がある |
-| `rustls_pki_types` / `webpki` / `ring` / `aws_lc_rs` | 証明書検証・暗号層 |
-| `tokio` | `blocking` feature が引き込むランタイム。ワイヤ情報は出さない見込みだが要確認 |
+| クレート | `tracing` に直接依存 | `log` に直接依存 | 結論 |
+|:---|:---|:---|:---|
+| `hyper_util` | ✅ | - | イベントを出せる。**既に対象に含まれている** |
+| `reqwest` | - | ✅ | イベントを出せる。**既に対象に含まれている** |
+| `hyper` | - | - | ログファサードに依存せずイベントを出せない |
+| `rustls` | - | - | 同上 |
+| `ring` | - | - | 同上 |
+| `hyper-rustls` | - | - | 同上 |
+| `tower` / `tower-http` | - | - | 同上 |
+| `rustls-webpki` / `rustls-pki-types` / `webpki-roots` | - | - | 同上 |
+| `tokio` | - | - | 同上 |
 
-**実装手順:**
+**結論: `HTTP_LAYER_CRATES` への追加は不要です。** 3.2 節までの推測候補
+（`hyper_rustls`/`tower`/`tower_http`/`rustls_pki_types`/`webpki`/`ring`/`aws_lc_rs`/`tokio`）は
+いずれもログファサードに依存しておらず、実測の結果誤りだったと判明しました。
+`reqwest` が依存する `log` クレートは、本 CLI が `tracing_log::LogTracer` のようなブリッジを
+`logging::init` にインストールしていない限り、グローバルロガー未設定のため呼び出しが素通りします
+（`log` マクロはグローバルロガー未設定時は no-op）。したがって `reqwest` の `log` 経由の出力は
+現状の実装でも構造的に出ません。念のため `reqwest` を対象に含め続けます（将来ブリッジを追加した場合の防御）。
+
+**追加漏れがあると、ログフィルタの指定次第で `Authorization` ヘッダが stderr に出ます。**
+今回は追加候補が実測で否定されたため、既存の `HTTP_LAYER_CRATES` をそのまま維持します。
+
+**実測手順（再現用）:**
 
 1. `cargo tree -e normal` で依存グラフを出し、HTTP / TLS 層のクレートを列挙する
-2. `HTTP_LAYER_CRATES` に追加する
+2. `cargo tree -e normal -i <crate>` および `Cargo.lock` の `dependencies` で
+   各クレートが `tracing` / `log` に直接依存するかを確認する
 3. 既存の `the_ceiling_cannot_be_bypassed_by_any_directive` テストが新しいクレートも
    対象にすることを確認する（この配列はテストからも参照されているため自動で対象に入る）
 4. 追加したクレートについて、`MINIMAX_LOG=<crate>=trace` を与えてもイベントが出ないことを確認する
@@ -417,8 +444,11 @@ pub enum ApiFailure {
     #[error("the MiniMax account balance is insufficient")]
     InsufficientBalance,
     /// レート制限に達した。自動再送はしない（FR-010）。
-    #[error("rate limited by the API; wait and retry (this CLI does not retry automatically)")]
-    RateLimited,
+    ///
+    /// API 由来の `detail` をそのまま見せる。実測の結果、`2056`（Token Plan の枠超過）は
+    /// 固定文言（待てば解決する）では誤案内になると判明したため（6.2 節）。
+    #[error("rate limited by the API (this CLI does not retry automatically): {detail}")]
+    RateLimited { detail: String },
     /// 入力に起因するエラー。
     #[error("the API rejected the input: {detail}")]
     InvalidInput { detail: String },
@@ -556,7 +586,7 @@ impl ApiFailure {
         match code {
             1004 | 2049 => Self::Unauthorized,
             1008 => Self::InsufficientBalance,
-            1002 | 1039 | 1041 | 2045 | 2056 => Self::RateLimited,
+            1002 | 1039 | 1041 | 2045 | 2056 => Self::RateLimited { detail: message },
             1026 | 1027 | 1042 | 2013 => Self::InvalidInput { detail: message },
             _ => Self::Other { code, message },
         }
@@ -573,7 +603,7 @@ impl ApiFailure {
 | 1039 | `RateLimited` | トークン数の上限（TPM） |
 | 1041 | `RateLimited` | 接続数の上限 |
 | 2045 | `RateLimited` | リクエストの急増 |
-| 2056 | `RateLimited` | 使用量上限（次のウィンドウまで待つ） |
+| 2056 | `RateLimited` | Token Plan の枠超過（**実測済み**。詳細は下の注記） |
 | 1026 / 1027 | `InvalidInput` | 入力 / 出力が規約に反する |
 | 1042 | `InvalidInput` | 不可視文字の割合が上限超過 |
 | 2013 | `InvalidInput` | 不正なパラメータ |
@@ -584,9 +614,16 @@ impl ApiFailure {
 > `1004` のメッセージに「token not match group」が含まれることがあり、
 > リージョン不一致でもこの区分に落ちます。
 
-> **この対応表は公開ドキュメントの調査結果に基づく未実測の情報です。**
-> `deny.toml` のライセンス実測（9.2）と同様、**実装 PR で実際の API レスポンスと照合し、
-> 齟齬があれば表を訂正してから実装する**ことを必須のタスクとします（CLAUDE.md の「事実確認ルール」）。
+> **`2056` は実装 PR で実機検証し、齟齬を確認・訂正済みです。** 実際に返ってきたのは
+> `status_code: 2056` / `status_msg: "Token Plan usage limit reached: Upgrade your Token Plan
+> or purchase Credits for more usage."` でした。当初の想定（「次のウィンドウまで待てば解決する」
+> 単純なレート制限）とは異なり、**プランのアップグレードか Credits 購入が必要な枠超過**でした。
+> `RateLimited` の案内文を固定文言から API 由来の `detail` に変更し、この種の齟齬があっても
+> 常に正しい案内になるようにしました（`ApiFailure::RateLimited { detail: String }`）。
+> `1002` / `1039` / `1041` / `2045` および `Unauthorized` / `InsufficientBalance` /
+> `InvalidInput` の各コードは公開ドキュメントの調査結果に基づく**未実測のまま**です
+> （実機でこれらのエラーを再現するには専用のテスト環境が必要なため、実装 PR の範囲では
+> 見送りました）。齟齬が見つかった場合は本節を更新してください（CLAUDE.md の「事実確認ルール」）。
 > この未実測課題は 9.2 節の未解決課題表にも記録しています。
 
 ## 6.3. 境界
@@ -657,15 +694,25 @@ pub fn write_audio(path: &Path, bytes: &[u8]) -> Result<(), TtsError>;
 | 結合テストで検証する経路 | API を呼ぶか |
 |:---|:---|
 | 位置引数と `--file` の同時指定 | 呼ばない（手順 1 で失敗） |
-| テキスト未指定（標準入力が端末） | 呼ばない（手順 1 で失敗） |
 | 空のテキストをパイプ | 呼ばない（手順 3 で失敗） |
 | 長さ上限を超えるテキスト | 呼ばない（手順 3 で失敗） |
 | 未対応の拡張子（`--output out.ogg`） | 呼ばない（手順 4 で失敗） |
 | 既存ファイル（`--force` なし） | 呼ばない（手順 5 で失敗） |
 | `--voice` / `--model` / `--output` の欠落 | 呼ばない（clap が失敗） |
-| 認証情報が未登録 | 呼ばない（手順 6 で失敗） |
 | `tts --help` | 呼ばない |
 | **失敗時に stdout が空であること**（上記すべて） | 呼ばない |
+
+**「テキスト未指定（標準入力が端末）」と「認証情報が未登録」の 2 経路は実装時に結合テストの対象外とした
+（当初のタスク分解からのスコープ縮小。下の D-001 の表に追加記録）。**
+
+- 「標準入力が端末」は `credential-management` の `auth login` TTY 判定失敗経路（design 8.1 節 D-10）と
+  同じ理由で対象外。`assert_cmd` の子プロセスの標準入力は pty ではないため、3 OS CI で
+  `is_terminal() == true` を再現する手段が無い。`src/tts.rs` の
+  `resolve_text_source_rejects_nothing_given_when_stdin_is_a_terminal` 単体テストが担保する
+- 「認証情報が未登録」は `credential::load` が実際の OS 資格情報ストアに触れるため、開発機に
+  既にトークンが登録されている環境ではテストが環境依存になる。`tests/auth.rs` が
+  `auth status` / `auth logout` の実ストア経路を結合テストの対象外にしているのと同じ理由
+  （design 6.1 節の `CredentialError` の区別自体は `src/credential.rs` の単体テストが担保する）
 
 **HTTP モックサーバーは導入しません。** CONSTITUTION.md の技術スタック制約が
 テストの手段を `assert_cmd` / `predicates` / `insta` に限っており、モックサーバーの追加は
@@ -710,12 +757,12 @@ pub fn write_audio(path: &Path, bytes: &[u8]) -> Result<(), TtsError>;
 
 ## 9.2. 未解決の課題
 
+**ライセンス・MSRV・`HTTP_LAYER_CRATES` の 3 件は実装 PR の最初のタスクで実測し解消済み**（3.2 / 3.3 節）。
+以下は実測では解消しない残課題です。
+
 | 課題 | 影響度 | 対応方針 |
 |:---|:---|:---|
-| **`rustls` の依存グラフに `deny.toml` の allow に無いライセンス（BSD-3-Clause / ISC 等）が含まれる可能性** | **高** | 実装 PR の最初のタスクで `cargo deny check licenses` を実測し、必要なら同じ PR で allow に追記する（3.2） |
-| `reqwest` 0.12 系の MSRV が 1.85 を超える可能性 | 中 | 実測する。超える場合はバージョンを下げる（MSRV は上げない。PRD DC_010） |
-| `HTTP_LAYER_CRATES` に追加すべきクレートの正確な一覧 | **高** | `cargo tree -e normal` で実測してから追加する（3.3）。**推測で列挙して実測を省略してはならない** |
-| 業務エラーコード対応表（6.2）が公開ドキュメントの調査結果に基づく未実測の情報である | 中 | 実装 PR で実際の API レスポンスと照合し、齟齬があれば表を訂正してから実装する（6.2） |
+| 業務エラーコード対応表（6.2）のうち `2056` 以外（`1002`/`1039`/`1041`/`2045`/`Unauthorized`/`InsufficientBalance`/`InvalidInput` の各コード）が公開ドキュメントの調査結果に基づく未実測のまま | 中 | `2056` は実装 PR で実機検証し、齟齬（固定文言では誤案内になる）を発見して訂正済み（6.2）。残りは再現に専用のテスト環境が必要なため、発生時に本節を更新する |
 | API のテキスト長上限の数え方 | 低 | D-5 のとおり char 数で近似する。境界付近の挙動は手動確認で把握する |
 | `usage_characters`（課金対象文字数）を利用者に見せるか | 低 | stderr に出す。stdout には出さない（成果物ではない） |
 | 音声形式ごとの API 側の制約（ビットレートは mp3 のみ有効など） | 低 | ビットレートを露出しないため現状は影響しない。パラメータを増やす際に再検討する |

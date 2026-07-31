@@ -17,4 +17,8 @@ pub enum Error {
     /// 認証情報の取得・保存・削除で起きた失敗。
     #[error(transparent)]
     Credential(#[from] crate::credential::CredentialError),
+
+    /// 音声合成で起きた失敗。
+    #[error(transparent)]
+    Tts(#[from] crate::tts::TtsError),
 }
