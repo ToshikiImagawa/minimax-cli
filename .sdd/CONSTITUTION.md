@@ -92,6 +92,7 @@
 - clap の `--help` / `-h` 出力
 - clap の `--version` / `-V` 出力
 - （TTS 実装後）生成した音声ファイルのパス 1 行
+- `auth status`（登録済み）: 登録済みリージョンの識別子 1 行（`global` / `china`）
 
 **違反例**:
 

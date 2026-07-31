@@ -35,6 +35,8 @@ anyhow = "1.0"
 thiserror = "2.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+keyring = { version = "3.6", default-features = false, features = ["apple-native", "windows-native", "linux-native"] }
+secrecy = "0.10"
 
 [dev-dependencies]
 assert_cmd = "2.2"

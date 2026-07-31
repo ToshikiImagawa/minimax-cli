@@ -4,9 +4,9 @@ title: "認証情報管理"
 type: "design"
 status: "approved"
 sdd-phase: "plan"
-impl-status: "not-implemented"
+impl-status: "implemented"
 created: "2026-07-29"
-updated: "2026-07-29"
+updated: "2026-07-31"
 depends-on: ["spec-credential-management"]
 tags: ["auth", "credential", "keychain", "security"]
 category: "credential"
@@ -37,9 +37,8 @@ risk: "high"
 
 ### B-002: stdout は成果物専用に保つ
 
-- [ ] **未達。** stdout へ書く経路が許可リストに載っているものだけであること
-      → `auth status` の 1 行は**未追記**。本機能の実装 PR で CONSTITUTION.md の許可リストへ
-      「（`auth status`）登録済みリージョン 1 行」を追加して解消する
+- [x] stdout へ書く経路が許可リストに載っているものだけであること
+      → `auth status` の 1 行を CONSTITUTION.md の許可リストへ追記済み（解消）
 - [x] 経路を増やす場合、同じ PR で許可リストへ追記する計画になっている（上記）
 - [x] 成果物の書き出しに `writeln!(std::io::stdout().lock(), ...)` を使う。
       `#[expect(clippy::print_stdout, ...)]` は付けない
@@ -87,35 +86,34 @@ risk: "high"
 **B-001 に関わる逸脱はありません。** B-001 は例外を認めない最上位原則であり、この機能はトークンを
 AI エージェントに渡す経路を 1 つも持ちません。
 
-**B-002 と D-001 には、それぞれ 1 件の正式な逸脱があります。** いずれも
-**恒久的な原則違反ではなく、実装 PR で解消する計画つきの未達（B-002）または恒久的な妥協として
-受け入れた範囲限定（D-001）**です。CONSTITUTION.md の例外プロセス（文書化・正当化・緩和・
-レビュー・追跡・計画）に従い、以下の表に記録します。
+**B-002 の逸脱は実装 PR で解消済みです。D-001 には、恒久的な妥協として受け入れた 1 件の
+正式な逸脱があります。** CONSTITUTION.md の例外プロセス（文書化・正当化・緩和・レビュー・
+追跡・計画）に従い、以下の表に記録します。
 
 | 原則 ID | 逸脱内容 | 理由 | 補償手段 | 解消条件 | 追跡 |
 |:---|:---|:---|:---|:---|:---|
-| B-002 | `auth status` の stdout 1 行が CONSTITUTION.md の許可リストに未追記 | 本設計書の作成時点では許可リストへの追記がまだ行われていない | 実装 PR で許可リストへ追記する（3.2 の計画） | 実装 PR のマージ時に解消 | 本機能の実装 PR |
-| D-001 | `auth status` / `auth logout` の成功経路と `auth login` の保存経路が結合テスト（バイナリ spawn）でカバーされず、単体テスト（境界を差し替えた `InMemoryStore`）のみで担保される | 実ストアへの書き込みを伴う結合テストは、開発者の実キーチェーンを汚す・CI 環境依存・並列実行での競合という副作用を持つ（8.1） | `CredentialStore` を差し替えた単体テストで、ストアに書き込む経路のロジックを担保する（D-4 の回帰テストを含む） | **恒久的な妥協として受け入れる**（テスト専用 feature でバイナリの境界を差し替える代替案は 9.2 の未解決課題として残す） | なし（設計判断として確定。9 節 D-6） |
+| B-002 | `auth status` の stdout 1 行が CONSTITUTION.md の許可リストに未追記 | 本設計書の作成時点では許可リストへの追記がまだ行われていない | 実装 PR で許可リストへ追記する（3.2 の計画） | **解消済み**（実装 PR で許可リストへ追記した） | 本機能の実装 PR |
+| D-001 | `auth status` / `auth logout` の成功経路と `auth login` の保存経路が結合テスト（バイナリ spawn）でカバーされず、単体テスト（境界を差し替えた `InMemoryStore`）のみで担保される。加えて `auth login` の TTY 判定失敗経路も結合テスト対象外（D-10） | 実ストアへの書き込みを伴う結合テストは、開発者の実キーチェーンを汚す・CI 環境依存・並列実行での競合という副作用を持つ（8.1）。TTY 判定経路は 3 OS CI で pty を使わずに固定する手段が無い（D-10） | `CredentialStore` を差し替えた単体テストで、ストアに書き込む経路のロジックを担保する（D-4 の回帰テストを含む）。TTY 判定は `is_terminal` を引数化した純粋関数の単体テストで担保する | **恒久的な妥協として受け入れる**（テスト専用 feature でバイナリの境界を差し替える代替案は 9.2 の未解決課題として残す） | なし（設計判断として確定。9 節 D-6 / D-10） |
 
 ---
 
 # 1. 実装ステータス
 
-**ステータス:** 🔴 未実装
+**ステータス:** 🟢 実装済み
 
 ## 1.1. 実装進捗
 
 | モジュール/機能 | ステータス | 備考 |
 |:---|:---|:---|
-| `src/credential.rs`（型・境界・ロジック） | 🔴 | 新規 |
-| `src/credential/os_store.rs`（OS ストア実装） | 🔴 | 新規 |
-| `src/cli.rs` の `auth` サブコマンド | 🔴 | 既存ファイルに追加 |
-| `src/error.rs` の `Error` | 🔴 | **骨格のみで未使用の現状を解消する**（9 節 D-7） |
-| `src/lib.rs` の `run()` の arm | 🔴 | 既存ファイルに追加 |
-| `tests/auth.rs`（結合テスト） | 🔴 | 新規テストバイナリ |
-| 両 README の CLI リファレンス表 | 🔴 | Linux の揮発性の明示を含む（spec の FR-010） |
-| `CHANGELOG.md` の `[Unreleased]` | 🔴 | 英語 1 行 |
-| CONSTITUTION.md の stdout 許可リスト | 🔴 | `auth status` の 1 行を追記（B-002） |
+| `src/credential.rs`（型・境界・ロジック） | 🟢 | 新規 |
+| `src/credential/os_store.rs`（OS ストア実装） | 🟢 | 新規 |
+| `src/cli.rs` の `auth` サブコマンド | 🟢 | 既存ファイルに追加 |
+| `src/error.rs` の `Error` | 🟢 | 骨格のみで未使用の状態を解消した（9 節 D-7） |
+| `src/lib.rs` の `run()` の arm | 🟢 | 既存ファイルに追加 |
+| `tests/auth.rs`（結合テスト） | 🟢 | 新規テストバイナリ |
+| 両 README の CLI リファレンス表 | 🟢 | Linux の揮発性の明示を含む（spec の FR-010） |
+| `CHANGELOG.md` の `[Unreleased]` | 🟢 | 英語 1 行 |
+| CONSTITUTION.md の stdout 許可リスト | 🟢 | `auth status` の 1 行を追記済み（B-002） |
 
 ---
 
@@ -181,7 +179,7 @@ graph TD
     Entry --> Run[lib.rs::run]
     Run --> Cli[cli.rs<br/>auth サブコマンドの定義]
     Run --> Cred[credential.rs<br/>型・境界・ロジック]
-    Cred --> Err[error.rs<br/>Error]
+    Err[error.rs<br/>Error] --> Cred
     Cred --> Boundary[credential::CredentialStore<br/>境界]
     Boundary --> OsStore[credential::os_store::OsStore<br/>keyring を呼ぶ]
     Boundary -.テスト時.-> MemStore[InMemoryStore<br/>#cfg test]
@@ -195,11 +193,15 @@ CONSTITUTION.md のレイヤ構成（`main.rs` → `lib.rs::main_entry` → `lib
 
 | モジュール（`src/*.rs`） | 責務 | 依存先 | 外部世界への到達 |
 |:---|:---|:---|:---|
-| `credential` | 型の定義、入力の正規化・検証、失敗の分類、境界 trait の定義 | `error` | **なし**（純粋） |
+| `credential` | 型の定義、入力の正規化・検証、失敗の分類、境界 trait の定義 | （なし） | **なし**（純粋） |
 | `credential::os_store` | `CredentialStore` の実装。`keyring` を呼ぶ | `credential` | OS の資格情報ストア |
 | `cli` | `auth` サブコマンドとフラグの定義 | （なし） | なし |
-| `error` | ライブラリ層のエラー型。`credential` のエラーを集約 | （なし） | なし |
+| `error` | ライブラリ層のエラー型。`credential` のエラーを集約 | `credential` | なし |
 | `lib.rs::run` | サブコマンドのディスパッチ、stdout / stderr への書き分け | `cli`, `credential`, `error` | stdout / stderr |
+
+**依存の方向は `error → credential` です**（`credential` が `error` に依存するのではない）。
+`error::Error` が `#[from] credential::CredentialError` で `credential` の型を取り込むため、
+依存の矢印はエラー集約の方向を向きます。`credential` 本体は他モジュールに依存しない純粋な境界です。
 
 **`credential` 本体が外部世界に到達しないことが A-001 の要点です。** ストアに触るコードは
 `credential::os_store` の 1 モジュールに閉じ込め、それ以外は `&impl CredentialStore` を経由します。
@@ -509,6 +511,15 @@ CONSTITUTION.md はカバレッジの数値目標を設けていません。何�
 実ストアへの副作用を持つテストを CI に置く代償のほうが大きいと判断しました（9 節 D-6）。
 より良い代替（テスト専用 feature で `OsStore` を差し替え可能にする）は 9.2 の未解決課題として残します。
 
+**`auth login` の TTY 判定（標準入力が端末である経路）も結合テストの対象外とします（D-10）。**
+`read_token_from` は `is_terminal` を引数で受け取る純粋関数であり（A-001）、この経路は
+Phase 2 の単体テストで既に固定済みです。結合テストでこの経路を固定するには、子プロセスの
+標準入力を実際の疑似端末（pty）に割り当てる必要がありますが、CI は 3 OS（Ubuntu / macOS /
+Windows）で走り、Unix の pty と Windows の ConPTY は API が異なるため、単一の軽量な手段が
+ありません。テスト実行環境の標準入力を継承する方式（ローカルでは TTY、CI では非 TTY になる）は、
+環境依存でテスト結果が変わる典型的なフレーク要因であり、本プロジェクトが他所（`LogEnv` の
+境界化等）で明示的に避けている失敗パターンと同種です。
+
 ## 8.2. その他の注意点
 
 - [x] 環境変数を読む処理を追加しない（本機能は環境変数を一切読まない。DC_005）
@@ -535,6 +546,8 @@ CONSTITUTION.md はカバレッジの数値目標を設けていません。何�
 | D-7 | `src/error.rs` の扱い | 未使用のまま `anyhow` を使う / `Error` を使い始める | **`Error` を使い始める** | CONSTITUTION.md が「TTS 実装時に解消する」とした未達項目。本機能は v0.1.0 の縦切りの一部なので、ここで `Error::Credential` を追加して集約を始める |
 | D-8 | トークンの内部表現 | `String` / `secrecy::SecretString` / 自前の Zeroize | **`secrecy::SecretString`** | A-002（セキュリティに関わる仕組みを自作しない）。`Debug` が封じられており、ドロップ時のゼロ化も委譲できる |
 | D-9 | 端末判定の手段 | `std::io::IsTerminal` / `atty` / `is-terminal` | **標準ライブラリ** | Rust 1.70 で安定化済みで MSRV 1.85 の範囲内。依存を増やさない |
+| D-10 | `auth login` の TTY 判定経路の結合テスト範囲 | pty クレート（`portable-pty` 等）を追加して結合テストで固定 / 単体テストのみで担保し結合テストの対象外にする | **単体テストのみで担保** | Unix pty と Windows ConPTY の API 差異、3 OS CI での実装コスト、テスト実行環境依存によるフレークのリスクが、pty クレート追加の効用を上回る。`is_terminal` を引数化した設計（A-001）により、この経路は既に純粋関数の単体テストで固定できている（8.1 節） |
+| D-11 | `OsStore` が `Region` と `ApiToken` を keyring にどう保存するか | 単一の `keyring::Entry` にリージョンとトークンを区切り文字で結合してシリアライズ / 同じ `service` の下で `user` を分けた2つの `keyring::Entry`（`token` / `region`） | **2つの `Entry` に分離**（`user: "token"` / `user: "region"`） | 単一エントリへの結合はトークン内に区切り文字が現れた場合の曖昧さを持つ。2つの `Entry` に分けることで曖昧さを排除でき、`keyring::Error` の対応（6.1 節）もエントリ単位でそのまま適用できる。代償として `set` / `delete` が2回の呼び出しになり、片方だけ失敗する部分的な不整合の可能性が残るが、`get` は `token` 側の `NoEntry` を優先して判定するため「未登録」の判定は破綻しない |
 
 > **`--region` の必須性は技術選定ではなく UX 上の決定**であり、[credential-management_spec.md](credential-management_spec.md) の
 > 5.1 節で確定済みです（既定値を置くと誤登録に気づけない）。この設計書では再掲しません。

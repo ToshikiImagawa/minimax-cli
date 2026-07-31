@@ -10,7 +10,7 @@ Generate speech audio files with the [MiniMax AI](https://platform.minimax.io/) 
 
 [日本語版 README](README.ja.md)
 
-> **Status: scaffolding phase.** Only `--version` and `--help` work today. Text-to-speech is not implemented yet.
+> **Status: partial implementation.** Credential management (`auth login` / `auth status` / `auth logout`) works today. Text-to-speech (`tts`) is not implemented yet.
 
 ## Features
 
@@ -75,7 +75,13 @@ Running `minimax` with no arguments prints the help text.
 | Command | Description |
 |:---|:---|
 | `tts <TEXT>` | Convert text into a speech audio file (**not implemented yet**) |
+| `auth login --region <REGION>` | Register an API token read from standard input. `--region` is required (`global` or `china`); an existing token is overwritten without confirmation |
+| `auth status` | Show whether a token is registered and for which region (prints the region to stdout) |
+| `auth logout` | Remove the registered API token. Succeeds even if none was registered |
 | `help` | Print help for a subcommand |
+
+> [!NOTE]
+> On Linux, the token is stored in the kernel keyring and is **lost on reboot**. `auth status` will report it as unregistered afterward; re-run `auth login` to restore it.
 
 ### Environment Variables
 

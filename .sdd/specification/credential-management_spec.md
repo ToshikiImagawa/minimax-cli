@@ -5,7 +5,7 @@ type: "spec"
 status: "approved"
 sdd-phase: "specify"
 created: "2026-07-29"
-updated: "2026-07-29"
+updated: "2026-07-31"
 depends-on: ["prd-credential-management"]
 tags: ["auth", "credential", "keychain", "security"]
 category: "credential"
@@ -74,9 +74,8 @@ B-002 は非交渉です。この機能が書き込む出力をすべて列挙�
 | `auth logout`: 削除対象が無かった旨 | stderr | B-002 |
 | すべてのエラー・診断 | stderr | B-002 |
 
-- [ ] **未達。** stdout へ書く経路が CONSTITUTION.md の**許可リスト**に載っていること
-      → 現在の許可リストは help / version / 音声ファイルのパスの 3 つで、`auth status` の 1 行は**未追記**。
-      **実装 PR で CONSTITUTION.md へ追記して解消する**（追記を伴わない実装は B-002 違反）
+- [x] stdout へ書く経路が CONSTITUTION.md の**許可リスト**に載っていること
+      → `auth status` の 1 行を CONSTITUTION.md の許可リストへ追記済み（解消）
 - [x] **失敗時に stdout が空**であることを結合テストで固定する（D-001。5.2 の終了コード表）
 
 > **トークンの値を stdout に出す経路は 1 つも定義しません。** `auth status` が返すのはリージョンの
@@ -87,13 +86,16 @@ B-002 は非交渉です。この機能が書き込む出力をすべて列挙�
 **B-001 に関わる逸脱はありません。** B-001 は例外を認めない最上位原則であり、この機能はトークンを
 AI エージェントに渡す経路を 1 つも持ちません（stdin 限定の入力、`--token` フラグを作らない、等）。
 
-**B-002 には 1 件、実装完了までの正式な逸脱があります。** 3.2 で述べた通り、`auth status` の
-stdout 出力（リージョンの識別子 1 行）は CONSTITUTION.md の許可リストに**未追記**です。これは
-CONSTITUTION.md の例外プロセス（文書化・正当化・追跡）に沿って記録した一時的な逸脱であり、
-実装 PR で許可リストへ追記することで解消します（追記を伴わない実装は B-002 違反となるため、
-design 側にも同じ制約を引き継いでいます）。
+**B-002 の逸脱は実装 PR で解消済みです。** 3.2 で述べた通り、`auth status` の stdout 出力
+（リージョンの識別子 1 行）を CONSTITUTION.md の許可リストへ追記しました。
 
-A-001 / A-002 / D-001 / T-001 には逸脱はありません。
+**D-001 には、恒久的な妥協として受け入れた正式な逸脱が設計フェーズで判明しました。**
+`auth status` / `auth logout` の成功経路、`auth login` の保存経路と TTY 判定失敗経路は、
+実ストアへの副作用や pty 依存を避けるため結合テストの対象外とし、単体テストで担保します。
+詳細と理由は [credential-management_design.md](credential-management_design.md) の 8.1 節・
+9.1 節（D-6 / D-10）・原則からの逸脱の表に記録しています。
+
+A-001 / A-002 / T-001 には逸脱はありません。
 
 なお Linux では、保存したトークンが**再起動で失われます**（PRD の DC_004）。
 これは原則からの逸脱ではなく、保存方式の制約を要求として受け入れたものです。
@@ -121,7 +123,7 @@ PRD の親 requirement ノード（`REQ_001`〜`REQ_004`）は、PRD 側の `con
 | FR_001_03 | 4.2 FR-003 | 単体テスト + 結合テスト |
 | FR_001_04 | 6.1（`StoredCredential`）/ 5.1（`--region`） | 結合テスト |
 | FR_001_05 | 4.2 FR-004 | 結合テスト |
-| FR_001_06 | 4.2 FR-005 | 結合テスト |
+| FR_001_06 | 4.2 FR-005 | 単体テスト（design 8.1節 D-10。3 OS CI での pty 制約により結合テスト対象外） |
 | FR_002 | 5.1（`auth status`）/ 3.2 / 5.2 | 結合テスト |
 | FR_003 | 5.1（`auth logout`）/ 4.2 FR-007 | 結合テスト |
 | FR_004 | 6（`load` の公開 API） | 単体テスト + 結合テスト |
@@ -222,6 +224,7 @@ lib 側の公開 API です。クレート名・バージョン・feature 指定
 | `credential` | `load(&impl CredentialStore)` | `pub` | 読み出す。失敗は `CredentialError` で区別する |
 | `credential` | `remove(&impl CredentialStore)` | `pub` | 削除する。未登録でも成功 |
 | `credential` | `parse_token(&str)` | `pub` | 入力の正規化と検証（FR-002 / FR-003）。ストアに触らない純粋関数 |
+| `credential` | `read_token_from(R, bool)` | `pub` | 標準入力から読み取り `parse_token` で正規化する。端末接続時は拒否する（FR-005）。`is_terminal` を引数で受け取る純粋関数（A-001） |
 
 `CredentialStore` を境界として分けているのは、`parse_token` のような判断ロジックを
 実際のストアに触れずに単体テストできるようにするためです（NFR-003）。
