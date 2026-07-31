@@ -13,4 +13,8 @@ pub enum Error {
     /// 入出力エラー。
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
+
+    /// 認証情報の取得・保存・削除で起きた失敗。
+    #[error(transparent)]
+    Credential(#[from] crate::credential::CredentialError),
 }

@@ -2,10 +2,10 @@
 id: "task-credential-management"
 title: "認証情報管理"
 type: "task"
-status: "pending"
+status: "completed"
 sdd-phase: "tasks"
 created: "2026-07-29"
-updated: "2026-07-29"
+updated: "2026-07-31"
 depends-on: ["design-credential-management"]
 ticket: "#6"
 tags: ["auth", "credential", "keychain", "security"]
@@ -52,7 +52,7 @@ priority: "critical"
 | #   | タスク | 説明 | 完了条件 | 依存 |
 |:----|:---|:---|:---|:---|
 | 4.1 | 単体テストの拡充 | Phase 2 で書いた単体テストに加え、`ApiToken` の `Debug` 出力にトークンの値が含まれないことを検証するテストを `src/credential.rs` の `#[cfg(test)]` に追加する | `cargo test --locked --all-features` が通り、`format!("{:?}", token)` が `"ApiToken(<redacted>)"` であることを検証している | 2.2, 2.4 |
-| 4.2 | 結合テスト `tests/auth.rs` | design 8.1節が定義する「ストアに触れる前に完結する経路」のみを対象に、新規結合テストバイナリを作成する: `auth login` で TTY 判定失敗（`--region` 指定あり）、空入力パイプ、`--region` 未指定/不正値（終了コード2）、`auth --help`/`auth login --help`、**すべての失敗経路で stdout が空であること** | `cargo test --test auth --locked` が通る。既存の `tests/common/mod.rs::bin()` を使い、子プロセスの環境変数（`LogEnv::NAMES`）を明示的に外す | 3.4 |
+| 4.2 | 結合テスト `tests/auth.rs` | design 8.1節が定義する「ストアに触れる前に完結する経路」のみを対象に、新規結合テストバイナリを作成する: 空入力パイプ、`--region` 未指定/不正値（終了コード2）、`auth --help`/`auth login --help`、**すべての失敗経路で stdout が空であること**。**`auth login` の TTY 判定失敗経路は対象外**（design 8.1節 D-10。3 OS CI で pty を使わずに固定する手段が無いため、Phase 2 の単体テスト `read_token_from_rejects_a_terminal` のみで担保する） | `cargo test --test auth --locked` が通る。既存の `tests/common/mod.rs::bin()` を使い、子プロセスの環境変数（`LogEnv::NAMES`）を明示的に外す | 3.4 |
 
 ### Phase 5: 仕上げ
 
